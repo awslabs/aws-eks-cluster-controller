@@ -1,0 +1,3 @@
+version: "1"
+domain: eks.amazonaws.com
+repo: github.com/awslabs/aws-eks-cluster-controller

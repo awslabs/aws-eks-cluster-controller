@@ -1,0 +1,138 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  creationTimestamp: null
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: ekss.cluster.eks.amazonaws.com
+spec:
+  group: cluster.eks.amazonaws.com
+  names:
+    kind: EKS
+    plural: ekss
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      properties:
+        apiVersion:
+          type: string
+        kind:
+          type: string
+        metadata:
+          type: object
+        spec:
+          properties:
+            accountId:
+              type: string
+            controlPlane:
+              properties:
+                clusterName:
+                  type: string
+                stackName:
+                  type: string
+              required:
+              - stackName
+              - clusterName
+              type: object
+            crossAccountRoleName:
+              type: string
+            nodeGroups:
+              items:
+                properties:
+                  name:
+                    type: string
+                required:
+                - name
+                type: object
+              type: array
+            region:
+              type: string
+          required:
+          - accountId
+          - crossAccountRoleName
+          - region
+          - controlPlane
+          - nodeGroups
+          type: object
+        status:
+          properties:
+            controlPlane:
+              properties:
+                apiVersion:
+                  type: string
+                kind:
+                  type: string
+                metadata:
+                  type: object
+                spec:
+                  properties:
+                    clusterName:
+                      type: string
+                    stackName:
+                      type: string
+                  required:
+                  - stackName
+                  - clusterName
+                  type: object
+                status:
+                  properties:
+                    certificateAuthorityData:
+                      type: string
+                    endpoint:
+                      type: string
+                    status:
+                      type: string
+                  required:
+                  - certificateAuthorityData
+                  - endpoint
+                  - status
+                  type: object
+              type: object
+            nodeGroups:
+              properties:
+                apiVersion:
+                  type: string
+                items:
+                  items:
+                    properties:
+                      apiVersion:
+                        type: string
+                      kind:
+                        type: string
+                      metadata:
+                        type: object
+                      spec:
+                        properties:
+                          name:
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      status:
+                        properties:
+                          status:
+                            type: string
+                        required:
+                        - status
+                        type: object
+                    type: object
+                  type: array
+                kind:
+                  type: string
+                metadata:
+                  type: object
+              required:
+              - items
+              type: object
+            status:
+              type: string
+          required:
+          - status
+          type: object
+  version: v1alpha1
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
