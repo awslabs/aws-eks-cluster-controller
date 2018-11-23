@@ -1,0 +1,18 @@
+apiVersion: cluster.eks.amazonaws.com/v1alpha1
+kind: EKS
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: eks-sample
+spec:
+  # Add fields here
+  foo: bar
+  accountId: 1234foo
+  crossAccountRoleName: "arn::::role/foo"
+  region: "us-test-1"
+  controlPlane:
+    stackName: "eks-1"
+    clusterName: "eks-1"
+  nodeGroups:
+    - {name: "g1"}
+    - {name: "g2"}
