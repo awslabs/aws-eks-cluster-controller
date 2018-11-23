@@ -1,0 +1,9 @@
+apiVersion: cluster.eks.amazonaws.com/v1alpha1
+kind: NodeGroup
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: nodegroup-sample
+spec:
+  # Add fields here
+  foo: bar
