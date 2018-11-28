@@ -65,4 +65,5 @@ func TestReconcile(t *testing.T) {
 		err := c.Get(context.TODO(), cpKey, getCP)
 		return getCP.Status.Status, err
 	}).Should(gomega.Equal(StatusComplete))
+
 }

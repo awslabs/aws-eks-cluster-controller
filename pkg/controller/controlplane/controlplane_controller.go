@@ -2,12 +2,19 @@ package controlplane
 
 import (
 	"context"
-	"time"
-
+	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cloudformation"
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/finalizers"
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/helpers"
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
+	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -30,7 +37,12 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileControlPlane{Client: mgr.GetClient(), scheme: mgr.GetScheme()}
+	return &ReconcileControlPlane{
+		Client: mgr.GetClient(),
+		scheme: mgr.GetScheme(),
+		log:    logging.New(),
+		sess:   session.Must(session.NewSession()),
+	}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -66,11 +78,17 @@ var _ reconcile.Reconciler = &ReconcileControlPlane{}
 type ReconcileControlPlane struct {
 	client.Client
 	scheme *runtime.Scheme
+	log    *zap.Logger
+	sess   *session.Session
 }
 
 var (
-	StatusCreating = "Creating Control Plane"
-	StatusComplete = "Complete"
+	StatusCreating             = "Creating Control Plane"
+	StatusComplete             = "Complete"
+	StatusDeleting             = "Deleting Control Plane"
+	StatusFailed               = "Failed"
+	ControlPlaneStackFinalizer = "cfn-stack.controlplane.eks.amazonaws.com"
+	ControlPlaneCFNTemplate    = "/opt/templates/cluster.yaml"
 )
 
 // Reconcile reads that state of the cluster for a ControlPlane object and makes changes based on the state read
@@ -82,6 +100,12 @@ var (
 // +kubebuilder:rbac:groups=cluster.eks.amazonaws.com,resources=controlplanes,verbs=get;list;watch;create;update;patch;delete
 func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the ControlPlane instance
+	logger := r.log.With(
+		zap.String("Kind", "ControlPlane"),
+		zap.String("Name", request.Name),
+		zap.String("NameSpace", request.Namespace),
+	)
+
 	instance := &clusterv1alpha1.ControlPlane{}
 	err := r.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
@@ -94,14 +118,152 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		return reconcile.Result{}, err
 	}
 
-	// TODO(user): Change this to be the object type created by your controller
-	// Define the desired Deployment object
+	logger.Info("got reconcile request")
+
+	eksClusterName, ok := instance.GetLabels()["eks.owner"]
+	if !ok {
+		logger.Error("eks.owner is missing")
+		instance.Status.Status = StatusFailed
+		r.Update(context.TODO(), instance)
+		return reconcile.Result{}, fmt.Errorf("eks.owner label is missing from control plane")
+	}
+	eksCluster := &clusterv1alpha1.EKS{}
+	err = r.Get(context.TODO(), types.NamespacedName{Name: eksClusterName, Namespace: instance.Namespace}, eksCluster)
+	if err != nil {
+		logger.Error("EKS cluster not found", zap.Error(err))
+		instance.Status.Status = StatusFailed
+		r.Update(context.TODO(), instance)
+		return reconcile.Result{}, err
+	}
+	logger.Info("found cluster", zap.String("ClusterName", eksCluster.Name))
+
+	targetAccountSession, err := eksCluster.Spec.GetCrossAccountSession(r.sess)
+	if err != nil {
+		logger.Error("failed to get cross account session", zap.Error(err))
+		return reconcile.Result{}, err
+	}
+	cfnSvc := cloudformation.New(targetAccountSession)
+
+	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		if finalizers.HasFinalizer(instance, ControlPlaneStackFinalizer) && instance.Status.Status != StatusDeleting {
+			logger.Info("deleting control plane cloudformation stack", zap.String("AWSAccountID", eksCluster.Spec.AccountID), zap.String("AWSRegion", eksCluster.Spec.Region), zap.String("StackName", instance.Spec.StackName))
+			instance.Status.Status = StatusDeleting
+			err = r.Update(context.TODO(), instance)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+
+			err = helpers.DeleteStack(cfnSvc, instance.Spec.StackName)
+			if err != nil {
+				logger.Error("error deleting controlplane cloudformation stack", zap.Error(err))
+				return reconcile.Result{}, err
+			}
+			logger.Info("cloudformation stack deleted successfully", zap.String("StackName", instance.Spec.StackName))
+
+			err = r.Get(context.TODO(), request.NamespacedName, instance)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+			instance.SetFinalizers(finalizers.RemoveFinalizer(instance, ControlPlaneStackFinalizer))
+			err = r.Update(context.TODO(), instance)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	if instance.Status.Status == StatusCreating {
+		// when controller failed restarts while waiting for create stack to finish
+		stack, err := helpers.DescribeStack(cfnSvc, instance.Spec.StackName)
+		if err != nil {
+			logger.Error("error while checking control plan stack", zap.Error(err))
+			return reconcile.Result{}, err
+		}
+
+		switch *stack.StackStatus {
+		case cloudformation.StackStatusCreateInProgress:
+			return reconcile.Result{}, nil
+		case cloudformation.StackStatusCreateComplete:
+			instance.Status.Status = StatusComplete
+			err = r.Update(context.TODO(), instance)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+			return reconcile.Result{}, nil
+		default:
+			instance.Status.Status = StatusFailed
+			err = r.Update(context.TODO(), instance)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+			return reconcile.Result{}, nil
+		}
+		return reconcile.Result{}, nil
+	}
+
+	if instance.Status.Status == StatusComplete {
+		// TODO: verify update is needed or not and take action
+		return reconcile.Result{}, nil
+		//_, err = helpers.DescribeStack(cfnSvc, instance.Spec.StackName)
+		//if err == nil {
+		//	return reconcile.Result{}, nil
+		//}
+	}
+
+	logger.Info("creating EKS control plane cloudformation stack", zap.String("AWSAccountID", eksCluster.Spec.AccountID), zap.String("AWSRegion", eksCluster.Spec.Region), zap.String("StackName", instance.Spec.StackName))
+
 	instance.Status.Status = StatusCreating
-	time.Sleep(time.Second * 5)
+	instance.SetFinalizers(finalizers.AddFinalizer(instance, ControlPlaneStackFinalizer))
+	err = r.Update(context.TODO(), instance)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	err = r.createControlPlaneStack(cfnSvc, instance.Spec.StackName, instance.Spec.ClusterName)
+	if err != nil {
+		logger.Error("error creating controlplane cloudformation stack", zap.Error(err))
+		instance.Status.Status = StatusFailed
+		r.Update(context.TODO(), instance)
+		return reconcile.Result{}, err
+	}
+	logger.Info("cloudformation stack created successfully", zap.String("StackName", instance.Spec.StackName))
+
+	err = r.Get(context.TODO(), request.NamespacedName, instance)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 	instance.Status.Status = StatusComplete
 	err = r.Update(context.TODO(), instance)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
+
 	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileControlPlane) createControlPlaneStack(cfnSvc *cloudformation.CloudFormation, stackName, clusterName string) error {
+	templateBody, err := helpers.GetCFNTemplateBody(ControlPlaneCFNTemplate, map[string]string{
+		"ClusterName": clusterName,
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = helpers.CreateAndDescribeStack(cfnSvc, &cloudformation.CreateStackInput{
+		TemplateBody: aws.String(templateBody),
+		StackName:    aws.String(stackName),
+		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
+		Tags: []*cloudformation.Tag{
+			{
+				Key:   aws.String("ClusterName"),
+				Value: aws.String(clusterName),
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }

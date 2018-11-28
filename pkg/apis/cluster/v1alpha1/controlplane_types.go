@@ -13,7 +13,6 @@ type ControlPlaneSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	StackName   string `json:"stackName"`
 	ClusterName string `json:"clusterName"`
-	// Type        string
 }
 
 // ControlPlaneStatus defines the observed state of ControlPlane
