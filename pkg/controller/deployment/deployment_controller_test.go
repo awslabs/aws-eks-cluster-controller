@@ -114,10 +114,4 @@ func TestReconcile(t *testing.T) {
 	err = c.Get(context.TODO(), types.NamespacedName{Namespace: "default", Name: "foo"}, rDep)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
-	g.Eventually(func() (string, error) {
-		dep := &componentsv1alpha1.Deployment{}
-		err := c.Get(context.TODO(), types.NamespacedName{Namespace: "default", Name: "foo"}, dep)
-		return dep.Status.Status, err
-	}).Should(gomega.Equal("complete"))
-
 }

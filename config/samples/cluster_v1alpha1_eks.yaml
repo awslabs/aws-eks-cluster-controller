@@ -7,8 +7,8 @@ metadata:
 spec:
   # Add fields here
   foo: bar
-  accountId: 1234foo
-  crossAccountRoleName: "arn::::role/foo"
+  accountId: "12345678912"
+  crossAccountRoleName: "foo"
   region: "us-test-1"
   controlPlane:
     stackName: "eks-1"

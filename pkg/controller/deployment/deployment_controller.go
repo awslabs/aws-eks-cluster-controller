@@ -17,7 +17,10 @@ package deployment
 
 import (
 	"context"
+	"reflect"
 	"time"
+
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/finalizers"
 
 	appsv1 "k8s.io/api/apps/v1"
 
@@ -143,7 +146,6 @@ func (r *ReconcileDeployment) Reconcile(request reconcile.Request) (reconcile.Re
 	// TODO(user): Change this to be the object type created by your controller
 	// Define the desired Deployment object
 
-	// TODO: if cluster doesn't exist clear finalizers and error
 	cluster := &clusterv1alpha1.EKS{}
 	clusterKey := types.NamespacedName{Name: instance.Spec.Cluster, Namespace: instance.Namespace}
 	if err := r.Get(context.TODO(), clusterKey, cluster); err != nil {
@@ -163,9 +165,26 @@ func (r *ReconcileDeployment) Reconcile(request reconcile.Request) (reconcile.Re
 	log.Info("got client")
 
 	// TODO: if deleting - Delete remote deployment
+	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		if finalizers.HasFinalizer(instance, DeploymentFinalizer) {
+			instance.Finalizers = finalizers.RemoveFinalizer(instance, DeploymentFinalizer)
+			if err := r.Client.Update(context.TODO(), instance); err != nil {
+				return reconcile.Result{}, err
+			}
 
-	// TODO: Get Remote Deployment
-	//       If NotFound - Create and add Finalizer
+			found := &appsv1.Deployment{}
+			if err := client.Get(context.TODO(), request.NamespacedName, found); err != nil {
+				log.Error("could not get remote deployment", zap.Error(err))
+				return reconcile.Result{}, nil
+			}
+			if err := client.Delete(context.TODO(), found); err != nil {
+				log.Error("could not delete remote deployment", zap.Error(err))
+			}
+			return reconcile.Result{}, nil
+
+		}
+	}
+
 	rDeployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        instance.Name,
@@ -184,7 +203,6 @@ func (r *ReconcileDeployment) Reconcile(request reconcile.Request) (reconcile.Re
 			log.Error("failed to create deployment", zap.Error(err))
 			return reconcile.Result{}, err
 		}
-
 		instance.Finalizers = []string{DeploymentFinalizer}
 		if err := r.Client.Update(context.TODO(), instance); err != nil {
 			log.Error("failed to create deployment", zap.Error(err))
@@ -196,12 +214,13 @@ func (r *ReconcileDeployment) Reconcile(request reconcile.Request) (reconcile.Re
 	}
 	log.Info("found remote deployment")
 
-	// TODO: Update remote deployment spec
-
-	instance.Status.Status = "complete"
-	if err := r.Update(context.TODO(), instance); err != nil {
-		log.Error("could not update status", zap.Error(err))
-		return reconcile.Result{}, err
+	if !reflect.DeepEqual(found.Spec, rDeployment.Spec) {
+		found.Spec = rDeployment.Spec
+		log.Info("updating deployment")
+		err := client.Update(context.TODO(), found)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	log.Info("Finished")
