@@ -131,7 +131,7 @@ func (c *FakeControlPlanes) DeleteCollection(options *v1.DeleteOptions, listOpti
 // Patch applies the patch and returns the patched controlPlane.
 func (c *FakeControlPlanes) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ControlPlane, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(controlplanesResource, c.ns, name, pt, data, subresources...), &v1alpha1.ControlPlane{})
+		Invokes(testing.NewPatchSubresourceAction(controlplanesResource, c.ns, name, data, subresources...), &v1alpha1.ControlPlane{})
 
 	if obj == nil {
 		return nil, err
