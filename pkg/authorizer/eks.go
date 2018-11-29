@@ -2,13 +2,11 @@ package authorizer
 
 import (
 	"bytes"
-	"fmt"
 	"text/template"
 
 	"github.com/aws/aws-sdk-go/service/eks/eksiface"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/service/eks"
 
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -31,7 +29,7 @@ func NewEks(rootSession *session.Session, log *zap.Logger) *EKSAuthorizer {
 }
 
 func (e *EKSAuthorizer) GetKubeConfig(eksCluster *clusterv1alpha1.EKS) ([]byte, error) {
-	sess, err := getCrossAccountSession(e.rootSession, eksCluster.Spec.AccountID, eksCluster.Spec.CrossAccountRoleName, eksCluster.Spec.Region)
+	sess, err := eksCluster.Spec.GetCrossAccountSession(e.rootSession)
 	if err != nil {
 		e.log.Error("failed to get cross account session", zap.Error(err))
 		return nil, err
@@ -53,13 +51,6 @@ func (e *EKSAuthorizer) GetClient(eksCluster *clusterv1alpha1.EKS) (client.Clien
 }
 
 var _ Authorizer = &EKSAuthorizer{}
-
-func getCrossAccountSession(rootSession *session.Session, accountID, roleName, region string) (*session.Session, error) {
-	return session.NewSession(&aws.Config{
-		Region:      aws.String(region),
-		Credentials: stscreds.NewCredentials(rootSession, fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, roleName)),
-	})
-}
 
 func (e *EKSAuthorizer) buildKubeconfig(eksSvc eksiface.EKSAPI, clusterName string) ([]byte, error) {
 	log := e.log.With(zap.String("ClusterName", clusterName))

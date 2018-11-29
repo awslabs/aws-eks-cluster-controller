@@ -1,6 +1,11 @@
 package v1alpha1
 
 import (
+	"fmt"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	"github.com/aws/aws-sdk-go/aws/session"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -88,4 +93,11 @@ func (e EKS) RemoveFinalizer(finalizer string) []string {
 		finalizers = append(finalizers, f)
 	}
 	return finalizers
+}
+
+func (e EKSSpec) GetCrossAccountSession(rootSession *session.Session) (*session.Session, error) {
+	return session.NewSession(&aws.Config{
+		Region:      aws.String(e.Region),
+		Credentials: stscreds.NewCredentials(rootSession, fmt.Sprintf("arn:aws:iam::%s:role/%s", e.AccountID, e.CrossAccountRoleName)),
+	})
 }
