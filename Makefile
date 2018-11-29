@@ -39,7 +39,7 @@ vet:
 
 # Generate code
 generate:
-	go generate ./pkg/... ./cmd/...
+	./hack/update-codegen.sh
 
 # Build the docker image
 docker-build: test
