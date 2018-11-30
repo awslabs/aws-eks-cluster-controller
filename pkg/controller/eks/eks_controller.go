@@ -137,7 +137,7 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 
 	}
 
-	cpStatus, err := r.createControllPlane(instance)
+	cpStatus, err := r.createControlPlane(instance)
 	if err != nil {
 		logger.Error("create Control Plane Failed", zap.Error(err))
 		return reconcile.Result{}, err
@@ -186,7 +186,7 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileEKS) createControllPlane(instance *clusterv1alpha1.EKS) (string, error) {
+func (r *ReconcileEKS) createControlPlane(instance *clusterv1alpha1.EKS) (string, error) {
 	cp := &clusterv1alpha1.ControlPlane{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      instance.Name + "-controlplane",
