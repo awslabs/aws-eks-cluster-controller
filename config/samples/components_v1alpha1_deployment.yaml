@@ -1,0 +1,30 @@
+apiVersion: components.eks.amazonaws.com/v1alpha1
+kind: Deployment
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: deployment-sample
+spec:
+  # Add fields here
+  cluster: eks-sample
+  selector:
+    matchLabels:
+      app: nginx-deployment
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: nginx-deployment
+    spec:
+      containers:
+      - image: nginx
+        imagePullPolicy: Always
+        name: nginx
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
