@@ -19,10 +19,11 @@ var c client.Client
 
 var expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: "foo", Namespace: "default"}}
 var controlPlaneKey = types.NamespacedName{Name: "foo-controlplane", Namespace: "default"}
-var nodeGroup1Key = types.NamespacedName{Name: "foo-nodegroup-1", Namespace: "default"}
-var nodeGroup2Key = types.NamespacedName{Name: "foo-nodegroup-2", Namespace: "default"}
+var nodeGroup1Key = types.NamespacedName{Name: "foo-nodegroup-group1", Namespace: "default"}
+var nodeGroup2Key = types.NamespacedName{Name: "foo-nodegroup-group2", Namespace: "default"}
+var eksKey = types.NamespacedName{Name: "foo", Namespace: "default"}
 
-const timeout = time.Second * 25
+const timeout = time.Second * 5
 
 func TestReconcile(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
@@ -35,8 +36,8 @@ func TestReconcile(t *testing.T) {
 				StackName:   "stack-stuff",
 			},
 			NodeGroups: []clusterv1alpha1.NodeGroupSpec{
-				clusterv1alpha1.NodeGroupSpec{},
-				clusterv1alpha1.NodeGroupSpec{},
+				clusterv1alpha1.NodeGroupSpec{Name: "Group1"},
+				clusterv1alpha1.NodeGroupSpec{Name: "Group2"},
 			},
 		},
 	}
@@ -66,22 +67,50 @@ func TestReconcile(t *testing.T) {
 		return
 	}
 	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer c.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
+
+	//go func() {
+	//	for range requests {
+	//	}
+	//}()
 
 	controlPlane := &clusterv1alpha1.ControlPlane{}
 	g.Eventually(func() error { return c.Get(context.TODO(), controlPlaneKey, controlPlane) }, timeout).
 		Should(gomega.Succeed())
 
-	// controlPlane.Status.Status = "Complete"
-	// g.Expect(c.Update(context.TODO(), controlPlane)).Should(gomega.Succeed())
+	// The ControlPlane controller is not running so set it's status manually
+	controlPlane.Status.Status = "Complete"
+	g.Expect(c.Update(context.TODO(), controlPlane)).Should(gomega.Succeed())
 
-	// nodeGroup1 := &clusterv1alpha1.NodeGroup{}
-	// g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup1Key, nodeGroup1) }, timeout).
-	// 	Should(gomega.Succeed())
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 
-	// nodeGroup2 := &clusterv1alpha1.NodeGroup{}
-	// g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup2Key, nodeGroup2) }, timeout).
-	// 	Should(gomega.Succeed())
+	nodeGroup1 := &clusterv1alpha1.NodeGroup{}
+	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup1Key, nodeGroup1) }, timeout).
+		Should(gomega.Succeed())
+	nodeGroup1.Status.Status = "Complete"
+	g.Expect(c.Update(context.TODO(), nodeGroup1)).Should(gomega.Succeed())
 
+	nodeGroup2 := &clusterv1alpha1.NodeGroup{}
+	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup2Key, nodeGroup2) }, timeout).
+		Should(gomega.Succeed())
+	nodeGroup2.Status.Status = "Complete"
+	g.Expect(c.Update(context.TODO(), nodeGroup2)).Should(gomega.Succeed())
+
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
+	g.Eventually(func() (string, error) {
+		eks := &clusterv1alpha1.EKS{}
+		err := c.Get(context.TODO(), eksKey, eks)
+		return eks.Status.Status, err
+	}).Should(gomega.Equal("Complete"))
+
+	err = c.Delete(context.TODO(), instance)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	// Drain requests.  The delete function loops a number of times
+	go func() {
+		for range requests {
+		}
+	}()
+
+	g.Eventually(func() error { return c.Get(context.TODO(), eksKey, instance) }).ShouldNot(gomega.Succeed())
 }

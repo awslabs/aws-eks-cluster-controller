@@ -1,12 +1,15 @@
 package v1alpha1
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -95,6 +98,13 @@ func (e EKS) RemoveFinalizer(finalizer string) []string {
 	return finalizers
 }
 
+func (e EKS) GetControlPlanes(c client.Client) (*ControlPlane, error) {
+	cp := &ControlPlane{}
+	cpKey := types.NamespacedName{Namespace: e.Namespace, Name: e.Name + "-controlplane"}
+
+	err := c.Get(context.TODO(), cpKey, cp)
+	return cp, err
+}
 func (e EKSSpec) GetCrossAccountSession(rootSession *session.Session) (*session.Session, error) {
 	return session.NewSession(&aws.Config{
 		Region:      aws.String(e.Region),
