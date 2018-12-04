@@ -1,6 +1,7 @@
 package controlplane
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
@@ -21,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"text/template"
 )
 
 /**
@@ -62,13 +64,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 	// TODO(user): Modify this to be the types you create
 	// Uncomment watch a Deployment created by ControlPlane - change this for objects you create
-	//err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
-	//	IsController: true,
-	//	OwnerType:    &clusterv1alpha1.ControlPlane{},
-	//})
-	//if err != nil {
-	//	return err
-	//}
 
 	return nil
 }
@@ -92,7 +87,6 @@ var (
 	StatusDeleteFailed         = "Delete Control Plane Failed"
 	StatusError                = "Control Plane Error"
 	ControlPlaneStackFinalizer = "cfn-stack.controlplane.eks.amazonaws.com"
-	ControlPlaneCFNTemplate    = "/opt/templates/cluster.yaml"
 )
 
 // Reconcile reads that state of the cluster for a ControlPlane object and makes changes based on the state read
@@ -251,15 +245,20 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 }
 
 func (r *ReconcileControlPlane) createControlPlaneStack(stackName, clusterName string) error {
-	templateBody, err := cfnhelper.GetCFNTemplateBody(ControlPlaneCFNTemplate, map[string]string{
-		"ClusterName": clusterName,
-	})
+	controlPlaneTemplate, err := template.New("cfn").Parse(controlplaneCFNTemplate)
 	if err != nil {
 		return err
 	}
 
+	b := bytes.NewBuffer([]byte{})
+	if err := controlPlaneTemplate.Execute(b, map[string]string{
+		"ClusterName": clusterName,
+	}); err != nil {
+		return err
+	}
+
 	_, err = cfnhelper.CreateAndDescribeStack(r.cfnSvc, &cloudformation.CreateStackInput{
-		TemplateBody: aws.String(templateBody),
+		TemplateBody: aws.String(b.String()),
 		StackName:    aws.String(stackName),
 		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 		Tags: []*cloudformation.Tag{

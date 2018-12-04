@@ -1,3 +1,6 @@
+package controlplane
+
+var controlplaneCFNTemplate = `
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Amazon EKS Networking + Control Plane [managed by aws-eks-cluster-operator]'
@@ -197,4 +200,4 @@ Outputs:
       Name: !Sub '${AWS::StackName}::Endpoint'
     Value:
       !GetAtt ControlPlane.Endpoint
-
+`
