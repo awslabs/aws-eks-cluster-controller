@@ -2,7 +2,6 @@ package cfnhelper
 
 import (
 	"errors"
-	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/cloudformation/cloudformationiface"
@@ -21,7 +20,6 @@ func (m *MockCloudformationAPI) CreateStack(input *cloudformation.CreateStackInp
 	if m.throwCreateStackErr {
 		return nil, errors.New("foo")
 	}
-	fmt.Println("---->> I WAS HERE--------")
 	return &cloudformation.CreateStackOutput{
 		StackId: aws.String("foo"),
 	}, nil
