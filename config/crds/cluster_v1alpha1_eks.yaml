@@ -28,10 +28,7 @@ spec:
               properties:
                 clusterName:
                   type: string
-                stackName:
-                  type: string
               required:
-              - stackName
               - clusterName
               type: object
             crossAccountRoleName:
@@ -68,10 +65,7 @@ spec:
                   properties:
                     clusterName:
                       type: string
-                    stackName:
-                      type: string
                   required:
-                  - stackName
                   - clusterName
                   type: object
                 status:

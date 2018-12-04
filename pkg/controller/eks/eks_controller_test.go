@@ -33,7 +33,6 @@ func TestReconcile(t *testing.T) {
 			AccountID: "1234foo",
 			ControlPlane: clusterv1alpha1.ControlPlaneSpec{
 				ClusterName: "cluster-stuff",
-				StackName:   "stack-stuff",
 			},
 			NodeGroups: []clusterv1alpha1.NodeGroupSpec{
 				clusterv1alpha1.NodeGroupSpec{Name: "Group1"},

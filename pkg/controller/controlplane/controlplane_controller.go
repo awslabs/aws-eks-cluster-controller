@@ -118,6 +118,8 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 
 	logger.Info("got reconcile request")
 
+	stackName := fmt.Sprintf("eks-%s", instance.Spec.ClusterName)
+
 	labelsToVerify := []string{"eks.owner.name", "eks.owner.namespace"}
 	for _, label := range labelsToVerify {
 		if _, ok := instance.Labels[label]; !ok {
@@ -149,21 +151,21 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		if finalizers.HasFinalizer(instance, ControlPlaneStackFinalizer) && instance.Status.Status != StatusDeleting {
-			logger.Info("deleting control plane cloudformation stack", zap.String("AWSAccountID", eksCluster.Spec.AccountID), zap.String("AWSRegion", eksCluster.Spec.Region), zap.String("StackName", instance.Spec.StackName))
+			logger.Info("deleting control plane cloudformation stack", zap.String("AWSAccountID", eksCluster.Spec.AccountID), zap.String("AWSRegion", eksCluster.Spec.Region), zap.String("StackName", stackName))
 			instance.Status.Status = StatusDeleting
 			err = r.Update(context.TODO(), instance)
 			if err != nil {
 				return reconcile.Result{}, err
 			}
 
-			err = cfnhelper.DeleteStack(r.cfnSvc, instance.Spec.StackName)
+			err = cfnhelper.DeleteStack(r.cfnSvc, stackName)
 			if err != nil {
 				logger.Error("error deleting controlplane cloudformation stack", zap.Error(err))
 				instance.Status.Status = StatusDeleteFailed
 				r.Update(context.TODO(), instance)
 				return reconcile.Result{}, err
 			}
-			logger.Info("cloudformation stack deleted successfully", zap.String("StackName", instance.Spec.StackName))
+			logger.Info("cloudformation stack deleted successfully", zap.String("StackName", stackName))
 
 			err = r.Get(context.TODO(), request.NamespacedName, instance)
 			if err != nil {
@@ -181,7 +183,7 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 
 	if instance.Status.Status == StatusCreating {
 		// when controller failed and restarts while waiting for create stack to finish
-		stack, err := cfnhelper.DescribeStack(r.cfnSvc, instance.Spec.StackName)
+		stack, err := cfnhelper.DescribeStack(r.cfnSvc, stackName)
 		if err != nil {
 			logger.Error("error while checking control plan stack", zap.Error(err))
 			return reconcile.Result{}, err
@@ -215,7 +217,7 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		return reconcile.Result{}, nil
 	}
 
-	logger.Info("creating EKS control plane cloudformation stack", zap.String("AWSAccountID", eksCluster.Spec.AccountID), zap.String("AWSRegion", eksCluster.Spec.Region), zap.String("StackName", instance.Spec.StackName))
+	logger.Info("creating EKS control plane cloudformation stack", zap.String("AWSAccountID", eksCluster.Spec.AccountID), zap.String("AWSRegion", eksCluster.Spec.Region), zap.String("StackName", stackName))
 
 	instance.Status.Status = StatusCreating
 	instance.SetFinalizers(finalizers.AddFinalizer(instance, ControlPlaneStackFinalizer))
@@ -224,12 +226,12 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		return reconcile.Result{}, err
 	}
 
-	err = r.createControlPlaneStack(instance.Spec.StackName, instance.Spec.ClusterName)
+	err = r.createControlPlaneStack(stackName, instance.Spec.ClusterName)
 	if err != nil {
 		logger.Error("error creating controlplane cloudformation stack", zap.Error(err))
 		return reconcile.Result{}, err
 	}
-	logger.Info("cloudformation stack created successfully", zap.String("StackName", instance.Spec.StackName))
+	logger.Info("cloudformation stack created successfully", zap.String("StackName", stackName))
 
 	err = r.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {

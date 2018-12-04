@@ -11,7 +11,6 @@ import (
 type ControlPlaneSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	StackName   string `json:"stackName"`
 	ClusterName string `json:"clusterName"`
 }
 

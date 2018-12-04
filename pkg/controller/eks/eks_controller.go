@@ -212,7 +212,6 @@ func (r *ReconcileEKS) createControlPlane(instance *clusterv1alpha1.EKS) (string
 		},
 		Spec: clusterv1alpha1.ControlPlaneSpec{
 			ClusterName: instance.Spec.ControlPlane.ClusterName,
-			StackName:   instance.Spec.ControlPlane.StackName,
 		},
 	}
 	if err := controllerutil.SetControllerReference(instance, cp, r.scheme); err != nil {

@@ -43,7 +43,6 @@ func TestReconcile(t *testing.T) {
 		Spec: clusterv1alpha1.EKSSpec{
 			AccountID: "1234",
 			ControlPlane: clusterv1alpha1.ControlPlaneSpec{
-				StackName:   "foo-stack",
 				ClusterName: "foo-cluster",
 			},
 			CrossAccountRoleName: "foo-role",
@@ -56,7 +55,6 @@ func TestReconcile(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "foo-cp", Namespace: "default", Labels: map[string]string{"eks.owner": "foo-eks"}},
 		Spec: clusterv1alpha1.ControlPlaneSpec{
 			ClusterName: "foo-cluster",
-			StackName:   "foo-stack",
 		},
 	}
 
