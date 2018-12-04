@@ -187,13 +187,21 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 }
 
 func (r *ReconcileEKS) createControlPlane(instance *clusterv1alpha1.EKS) (string, error) {
+	labels := map[string]string{
+		"eks.owner":           fmt.Sprintf("%s_%s", instance.Namespace, instance.Name),
+		"eks.owner.name":      instance.Name,
+		"eks.owner.namespace": instance.Namespace,
+	}
+	for k, v := range instance.Labels {
+		labels[k] = v
+	}
+
 	cp := &clusterv1alpha1.ControlPlane{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      instance.Name + "-controlplane",
-			Namespace: instance.Namespace,
-			Labels: map[string]string{
-				"eks.owner": fmt.Sprintf("%s_%s", instance.Namespace, instance.Name),
-			},
+			Name:        instance.Name + "-controlplane",
+			Namespace:   instance.Namespace,
+			Labels:      labels,
+			Annotations: instance.Annotations,
 		},
 		Spec: clusterv1alpha1.ControlPlaneSpec{
 			ClusterName: instance.Name + "-controlplane",
@@ -225,17 +233,24 @@ func (r *ReconcileEKS) createAllNodeGroups(instance *clusterv1alpha1.EKS) (strin
 		zap.String("Name", instance.Name),
 		zap.String("NameSpace", instance.Namespace),
 	)
+	labels := map[string]string{
+		"eks.owner":           fmt.Sprintf("%s_%s", instance.Namespace, instance.Name),
+		"eks.owner.name":      instance.Name,
+		"eks.owner.namespace": instance.Namespace,
+	}
+	for k, v := range instance.Labels {
+		labels[k] = v
+	}
 
 	nodeGroups := make([]*clusterv1alpha1.NodeGroup, 0, len(instance.Spec.NodeGroups))
 
 	for _, nodeGroupSpec := range instance.Spec.NodeGroups {
 		nodeGroup := &clusterv1alpha1.NodeGroup{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      strings.ToLower(fmt.Sprintf("%s-nodegroup-%s", instance.Name, nodeGroupSpec.Name)),
-				Namespace: instance.Namespace,
-				Labels: map[string]string{
-					"eks.owner": fmt.Sprintf("%s_%s", instance.Namespace, instance.Name),
-				},
+				Name:        strings.ToLower(fmt.Sprintf("%s-nodegroup-%s", instance.Name, nodeGroupSpec.Name)),
+				Namespace:   instance.Namespace,
+				Labels:      labels,
+				Annotations: instance.Annotations,
 			},
 			Spec: nodeGroupSpec,
 		}
@@ -263,7 +278,8 @@ func (r *ReconcileEKS) deleteNodeGroups(instance *clusterv1alpha1.EKS, logger *z
 
 	err := r.List(context.TODO(),
 		client.MatchingLabels(map[string]string{
-			"eks.owner": fmt.Sprintf("%s_%s", instance.Namespace, instance.Name),
+			"eks.owner.name":      instance.Name,
+			"eks.owner.namespace": instance.Namespace,
 		}),
 		nodeGroups)
 	if err != nil {
@@ -296,7 +312,8 @@ func (r *ReconcileEKS) deleteControlPlane(instance *clusterv1alpha1.EKS, logger 
 
 	err := r.List(context.TODO(),
 		client.MatchingLabels(map[string]string{
-			"eks.owner": fmt.Sprintf("%s_%s", instance.Namespace, instance.Name),
+			"eks.owner.name":      instance.Name,
+			"eks.owner.namespace": instance.Namespace,
 		}),
 		controlPlanes)
 	if err != nil {
