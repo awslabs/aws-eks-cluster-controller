@@ -32,4 +32,4 @@ CODEGEN_PKG=./vendor/k8s.io/code-generator
 go generate ./pkg/... ./cmd/...	
 ./vendor/k8s.io/code-generator/generate-groups.sh "client" \
   github.com/awslabs/aws-eks-cluster-controller/pkg github.com/awslabs/aws-eks-cluster-controller/pkg/apis \
-  cluster:v1alpha1 
+  "cluster:v1alpha1 components:v1alpha1"

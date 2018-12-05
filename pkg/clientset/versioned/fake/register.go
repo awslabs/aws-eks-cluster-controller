@@ -20,6 +20,7 @@ package fake
 
 import (
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
+	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -32,6 +33,7 @@ var codecs = serializer.NewCodecFactory(scheme)
 var parameterCodec = runtime.NewParameterCodec(scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
 	clusterv1alpha1.AddToScheme,
+	componentsv1alpha1.AddToScheme,
 }
 
 // AddToScheme adds all types of this clientset into the given scheme. This allows composition
