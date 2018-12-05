@@ -22,6 +22,8 @@ import (
 	clientset "github.com/awslabs/aws-eks-cluster-controller/pkg/clientset/versioned"
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/clientset/versioned/typed/cluster/v1alpha1"
 	fakeclusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/clientset/versioned/typed/cluster/v1alpha1/fake"
+	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/clientset/versioned/typed/components/v1alpha1"
+	fakecomponentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/clientset/versioned/typed/components/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -79,4 +81,14 @@ func (c *Clientset) ClusterV1alpha1() clusterv1alpha1.ClusterV1alpha1Interface {
 // Cluster retrieves the ClusterV1alpha1Client
 func (c *Clientset) Cluster() clusterv1alpha1.ClusterV1alpha1Interface {
 	return &fakeclusterv1alpha1.FakeClusterV1alpha1{Fake: &c.Fake}
+}
+
+// ComponentsV1alpha1 retrieves the ComponentsV1alpha1Client
+func (c *Clientset) ComponentsV1alpha1() componentsv1alpha1.ComponentsV1alpha1Interface {
+	return &fakecomponentsv1alpha1.FakeComponentsV1alpha1{Fake: &c.Fake}
+}
+
+// Components retrieves the ComponentsV1alpha1Client
+func (c *Clientset) Components() componentsv1alpha1.ComponentsV1alpha1Interface {
+	return &fakecomponentsv1alpha1.FakeComponentsV1alpha1{Fake: &c.Fake}
 }
