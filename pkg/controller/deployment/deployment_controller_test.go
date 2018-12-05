@@ -109,11 +109,15 @@ func TestReconcile(t *testing.T) {
 		return
 	}
 	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer c.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 
 	rDep := &appsv1.Deployment{}
 	err = c.Get(context.TODO(), depKey, rDep)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
+	g.Expect(c.Delete(context.TODO(), instance)).Should(gomega.Succeed())
+
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
+
+	g.Eventually(func() error { return c.Get(context.TODO(), depKey, rDep) }).Should(gomega.HaveOccurred())
 }
