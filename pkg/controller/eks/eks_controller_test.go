@@ -78,7 +78,7 @@ func TestReconcile(t *testing.T) {
 		Should(gomega.Succeed())
 
 	// The ControlPlane controller is not running so set it's status manually
-	controlPlane.Status.Status = "Complete"
+	controlPlane.Status.Status = "Create Control Plane Complete"
 	g.Expect(c.Update(context.TODO(), controlPlane)).Should(gomega.Succeed())
 
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))

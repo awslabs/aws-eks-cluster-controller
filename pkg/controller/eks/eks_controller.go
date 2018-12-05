@@ -149,7 +149,9 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 		logger.Error("create Control Plane Failed", zap.Error(err))
 		return reconcile.Result{}, err
 	}
-	if cpStatus == ControlPlaneCreating {
+
+	switch cpStatus {
+	case ControlPlaneCreating:
 		instance.SetFinalizers(finalizers.AddFinalizer(instance, ControlPlaneFinalizer))
 		instance.Status.Status = "Creating Control Plane"
 		err = r.Update(context.TODO(), instance)
@@ -157,10 +159,20 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 			return reconcile.Result{RequeueAfter: 5 * time.Second}, err
 		}
 		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
-	}
-
-	if cpStatus == ControlPlaneUpdating {
+	case ControlPlaneUpdating:
 		logger.Info("create Control Plane not complete")
+		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+	case controlplane.StatusError, controlplane.StatusCreateFailed:
+		instance.Status.Status = cpStatus
+		err = r.Update(context.TODO(), instance)
+		if err != nil {
+			return reconcile.Result{RequeueAfter: 5 * time.Second}, err
+		}
+		return reconcile.Result{}, nil
+	case controlplane.StatusCreateComplete:
+		// only create nodegroups if controlplane create completes
+		break
+	default:
 		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
@@ -345,7 +357,7 @@ func (r *ReconcileEKS) deleteControlPlane(instance *clusterv1alpha1.EKS, logger 
 		}
 	}
 
-	instance.Status.Status = controlplane.StatusDeleting
+	instance.Status.Status = "Deleting Control Plane"
 	err = r.Update(context.TODO(), instance)
 	if err != nil {
 		return reconcile.Result{}, err

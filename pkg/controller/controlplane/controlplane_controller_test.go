@@ -52,7 +52,7 @@ func TestReconcile(t *testing.T) {
 	}
 
 	instance := &clusterv1alpha1.ControlPlane{
-		ObjectMeta: metav1.ObjectMeta{Name: "foo-cp", Namespace: "default", Labels: map[string]string{"eks.owner": "foo-eks"}},
+		ObjectMeta: metav1.ObjectMeta{Name: "foo-cp", Namespace: "default", Labels: map[string]string{"eks.owner.name": "foo-eks", "eks.owner.namespace": "default"}},
 		Spec: clusterv1alpha1.ControlPlaneSpec{
 			ClusterName: "foo-cluster",
 		},
@@ -93,7 +93,7 @@ func TestReconcile(t *testing.T) {
 	g.Eventually(func() (string, error) {
 		err := c.Get(context.TODO(), cpKey, getCP)
 		return getCP.Status.Status, err
-	}).Should(gomega.Equal(StatusComplete))
+	}).Should(gomega.Equal(StatusCreateComplete))
 
 	err = c.Delete(context.TODO(), instance)
 	if apierrors.IsInvalid(err) {
@@ -102,10 +102,4 @@ func TestReconcile(t *testing.T) {
 	}
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-
-	oldCP := &clusterv1alpha1.ControlPlane{}
-	g.Eventually(func() bool {
-		err := c.Get(context.TODO(), cpKey, oldCP)
-		return apierrors.IsNotFound(err)
-	}).Should(gomega.Equal(true))
 }
