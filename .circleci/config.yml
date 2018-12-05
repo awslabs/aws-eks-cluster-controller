@@ -1,0 +1,31 @@
+# Golang CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-go/ for more details
+version: 2
+jobs:
+  build:
+    docker:
+      # specify the version
+      - image: circleci/golang:1.11
+      
+      # Specify service dependencies here if necessary
+      # CircleCI maintains a library of pre-built images
+      # documented at https://circleci.com/docs/2.0/circleci-images/
+      # - image: circleci/postgres:9.4
+
+    #### TEMPLATE_NOTE: go expects specific checkout path representing url
+    #### expecting it in the form of
+    ####   /go/src/github.com/circleci/go-tool
+    ####   /go/src/bitbucket.org/circleci/go-tool
+    working_directory: /go/src/github.com/awslabs/aws-eks-cluster-controller
+    environment:
+      KUBEBUILDER_CONTROLPLANE_START_TIMEOUT: "60s"
+    steps:
+      - checkout
+      - run: curl -L -O https://github.com/kubernetes-sigs/kubebuilder/releases/download/v1.0.5/kubebuilder_1.0.5_linux_amd64.tar.gz
+      - run: tar -zxvf kubebuilder_1.0.5_linux_amd64.tar.gz
+      - run: mv kubebuilder_1.0.5_linux_amd64 kubebuilder && sudo mv kubebuilder /usr/local/
+      - run: export PATH=$PATH:/usr/local/kubebuilder/bin
+      # specify any bash command here prefixed with `run: `
+      - run: go test -v ./pkg/apis/...
+      - run: make
