@@ -32,7 +32,8 @@ type ConfigMapSpec struct {
 	NameSpace string `json:"nameSpace"`
 
 	// +optional
-	Data       map[string]string `json:"data,omitempty"`
+	Data map[string]string `json:"data,omitempty"`
+	// +optional
 	BinaryData map[string][]byte `json:"binaryData,omitempty"`
 }
 

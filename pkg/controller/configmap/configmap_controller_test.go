@@ -23,7 +23,6 @@ import (
 	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
 	"github.com/onsi/gomega"
 	"golang.org/x/net/context"
-	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,14 +33,22 @@ import (
 
 var c client.Client
 
-var expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: "foo", Namespace: "default"}}
-var depKey = types.NamespacedName{Name: "foo-deployment", Namespace: "default"}
+var expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: "foo-cm", Namespace: "default"}}
+var cmKey = types.NamespacedName{Name: "foo-cm", Namespace: "default"}
 
-const timeout = time.Second * 5
+const timeout = time.Second * 10
 
 func TestReconcile(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	instance := &componentsv1alpha1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"}}
+	instance := &componentsv1alpha1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: "foo-cm", Namespace: "default"},
+		Spec: componentsv1alpha1.ConfigMapSpec{
+			Name:      "remoteconfigmap",
+			NameSpace: "remotenamespace",
+			Cluster:   "cluster",
+			Data:      map[string]string{"key": "value"},
+		},
+	}
 
 	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
 	// channel when it is finished.
@@ -71,17 +78,11 @@ func TestReconcile(t *testing.T) {
 	defer c.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 
-	deploy := &appsv1.Deployment{}
-	g.Eventually(func() error { return c.Get(context.TODO(), depKey, deploy) }, timeout).
-		Should(gomega.Succeed())
-
-	// Delete the Deployment and expect Reconcile to be called for Deployment deletion
-	g.Expect(c.Delete(context.TODO(), deploy)).NotTo(gomega.HaveOccurred())
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-	g.Eventually(func() error { return c.Get(context.TODO(), depKey, deploy) }, timeout).
-		Should(gomega.Succeed())
-
-	// Manually delete Deployment since GC isn't enabled in the test control plane
-	g.Expect(c.Delete(context.TODO(), deploy)).To(gomega.Succeed())
+	cm := &componentsv1alpha1.ConfigMap{}
+	g.Eventually(func() (string, error) {
+		err := c.Get(context.TODO(), cmKey, cm)
+		return cm.Status.Status, err
+	}, timeout).
+		Should(gomega.Equal("CREATED"))
 
 }
