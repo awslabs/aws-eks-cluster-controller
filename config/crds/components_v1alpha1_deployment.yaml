@@ -27,6 +27,10 @@ spec:
             minReadySeconds:
               format: int32
               type: integer
+            name:
+              type: string
+            namespace:
+              type: string
             paused:
               type: boolean
             progressDeadlineSeconds:
@@ -48,6 +52,8 @@ spec:
           - selector
           - template
           - cluster
+          - name
+          - namespace
           type: object
         status:
           properties:

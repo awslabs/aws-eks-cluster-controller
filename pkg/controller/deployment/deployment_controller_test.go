@@ -38,7 +38,7 @@ import (
 var c client.Client
 
 var expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: "foo", Namespace: "default"}}
-var depKey = types.NamespacedName{Name: "foo-deployment", Namespace: "default"}
+var depKey = types.NamespacedName{Name: "remote-foo-deployment", Namespace: "default"}
 
 const timeout = time.Second * 5
 
@@ -58,7 +58,9 @@ func TestReconcile(t *testing.T) {
 	instance := &componentsv1alpha1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"},
 		Spec: componentsv1alpha1.DeploymentSpec{
-			Cluster: "foo-eks",
+			Cluster:   "foo-eks",
+			Name:      "remote-foo-deployment",
+			Namespace: "default",
 			DeploymentSpec: appsv1.DeploymentSpec{
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"deployment": "foo-deployment"},
@@ -111,7 +113,7 @@ func TestReconcile(t *testing.T) {
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 
 	rDep := &appsv1.Deployment{}
-	err = c.Get(context.TODO(), types.NamespacedName{Namespace: "default", Name: "foo"}, rDep)
+	err = c.Get(context.TODO(), depKey, rDep)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
 }
