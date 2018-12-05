@@ -67,37 +67,6 @@ func init() {
 	SchemeBuilder.Register(&EKS{}, &EKSList{})
 }
 
-func (e EKS) AddFinalizer(finalizer string) []string {
-	finalizers := e.GetFinalizers()
-	for _, f := range finalizers {
-		if finalizer == f {
-			return finalizers
-		}
-	}
-	return append([]string{finalizer}, finalizers...)
-}
-
-func (e EKS) HasFinalizer(finalizer string) bool {
-	finalizers := e.GetFinalizers()
-	for _, f := range finalizers {
-		if finalizer == f {
-			return true
-		}
-	}
-	return false
-}
-
-func (e EKS) RemoveFinalizer(finalizer string) []string {
-	finalizers := []string{}
-	for _, f := range e.Finalizers {
-		if f == finalizer {
-			continue
-		}
-		finalizers = append(finalizers, f)
-	}
-	return finalizers
-}
-
 func (e EKS) GetControlPlanes(c client.Client) (*ControlPlane, error) {
 	cp := &ControlPlane{}
 	cpKey := types.NamespacedName{Namespace: e.Namespace, Name: e.Name + "-controlplane"}
@@ -105,6 +74,7 @@ func (e EKS) GetControlPlanes(c client.Client) (*ControlPlane, error) {
 	err := c.Get(context.TODO(), cpKey, cp)
 	return cp, err
 }
+
 func (e EKSSpec) GetCrossAccountSession(rootSession *session.Session) (*session.Session, error) {
 	return session.NewSession(&aws.Config{
 		Region:      aws.String(e.Region),

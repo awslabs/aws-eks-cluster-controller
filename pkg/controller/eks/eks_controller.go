@@ -11,6 +11,8 @@ import (
 	"go.uber.org/zap"
 
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/controller/controlplane"
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/finalizers"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -78,6 +80,11 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 var _ reconcile.Reconciler = &ReconcileEKS{}
 
+var (
+	NodeGroupFinalizer    = "nodegroup.eks.amazonaws.com"
+	ControlPlaneFinalizer = "controlplane.eks.amazonaws.com"
+)
+
 // ReconcileEKS reconciles a EKS object
 type ReconcileEKS struct {
 	client.Client
@@ -113,11 +120,12 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
+
 	logger.Info("got reconcile request")
 
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		logger.Info("deleting eks")
-		if instance.HasFinalizer("nodegroup.eks.amazonaws.com") {
+		if finalizers.HasFinalizer(instance, NodeGroupFinalizer) {
 			result, err := r.deleteNodeGroups(instance, logger)
 			if err != nil {
 				logger.Error("Error Deleting Node Groups", zap.Error(err))
@@ -125,7 +133,7 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 			return result, err
 		}
 
-		if instance.HasFinalizer("controlplane.eks.amazonaws.com") {
+		if finalizers.HasFinalizer(instance, ControlPlaneFinalizer) {
 			result, err := r.deleteControlPlane(instance, logger)
 			if err != nil {
 				logger.Error("Error Deleting Control Plane", zap.Error(err))
@@ -134,7 +142,6 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 		}
 
 		return reconcile.Result{}, nil
-
 	}
 
 	cpStatus, err := r.createControlPlane(instance)
@@ -142,29 +149,41 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 		logger.Error("create Control Plane Failed", zap.Error(err))
 		return reconcile.Result{}, err
 	}
-	if cpStatus == ControlPlaneCreating {
-		instance.SetFinalizers(instance.AddFinalizer("controlplane.eks.amazonaws.com"))
+
+	switch cpStatus {
+	case ControlPlaneCreating:
+		instance.SetFinalizers(finalizers.AddFinalizer(instance, ControlPlaneFinalizer))
 		instance.Status.Status = "Creating Control Plane"
 		err = r.Update(context.TODO(), instance)
 		if err != nil {
 			return reconcile.Result{RequeueAfter: 5 * time.Second}, err
 		}
 		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
-	}
-
-	if cpStatus == ControlPlaneUpdating {
+	case ControlPlaneUpdating:
 		logger.Info("create Control Plane not complete")
+		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+	case controlplane.StatusError, controlplane.StatusCreateFailed:
+		instance.Status.Status = cpStatus
+		err = r.Update(context.TODO(), instance)
+		if err != nil {
+			return reconcile.Result{RequeueAfter: 5 * time.Second}, err
+		}
+		return reconcile.Result{}, nil
+	case controlplane.StatusCreateComplete:
+		// only create nodegroups if controlplane create completes
+		break
+	default:
 		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
 	ngStatus, err := r.createAllNodeGroups(instance)
-
 	if err != nil {
 		logger.Error("error creating NodeGroups", zap.Error(err))
 		return reconcile.Result{}, err
 	}
+
 	if ngStatus == NodeGroupCreating {
-		instance.SetFinalizers(instance.AddFinalizer("nodegroup.eks.amazonaws.com"))
+		instance.SetFinalizers(finalizers.AddFinalizer(instance, NodeGroupFinalizer))
 		instance.Status.Status = "Creating NodeGroups"
 		err = r.Update(context.TODO(), instance)
 		if err != nil {
@@ -204,8 +223,7 @@ func (r *ReconcileEKS) createControlPlane(instance *clusterv1alpha1.EKS) (string
 			Annotations: instance.Annotations,
 		},
 		Spec: clusterv1alpha1.ControlPlaneSpec{
-			ClusterName: instance.Name + "-controlplane",
-			StackName:   instance.Name + "-controlplane",
+			ClusterName: instance.Spec.ControlPlane.ClusterName,
 		},
 	}
 	if err := controllerutil.SetControllerReference(instance, cp, r.scheme); err != nil {
@@ -288,7 +306,7 @@ func (r *ReconcileEKS) deleteNodeGroups(instance *clusterv1alpha1.EKS, logger *z
 
 	if len(nodeGroups.Items) == 0 {
 		logger.Info("Node Groups removed")
-		instance.Finalizers = instance.RemoveFinalizer("nodegroup.eks.amazonaws.com")
+		instance.Finalizers = finalizers.RemoveFinalizer(instance, NodeGroupFinalizer)
 		err = r.Update(context.TODO(), instance)
 		if err != nil {
 			return reconcile.Result{}, err
@@ -322,7 +340,7 @@ func (r *ReconcileEKS) deleteControlPlane(instance *clusterv1alpha1.EKS, logger 
 
 	if len(controlPlanes.Items) == 0 {
 		logger.Info("Control Plane removed")
-		instance.Finalizers = instance.RemoveFinalizer("controlplane.eks.amazonaws.com")
+		instance.Finalizers = finalizers.RemoveFinalizer(instance, ControlPlaneFinalizer)
 		err = r.Update(context.TODO(), instance)
 		if err != nil {
 			return reconcile.Result{}, err
@@ -332,10 +350,18 @@ func (r *ReconcileEKS) deleteControlPlane(instance *clusterv1alpha1.EKS, logger 
 
 	for _, controlPlane := range controlPlanes.Items {
 		logger.Info("deleting Control Plane", zap.String("ControlPlane", controlPlane.Name))
+
 		err = r.Delete(context.TODO(), &controlPlane)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
 	}
+
+	instance.Status.Status = "Deleting Control Plane"
+	err = r.Update(context.TODO(), instance)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
 	return reconcile.Result{Requeue: true}, nil
 }

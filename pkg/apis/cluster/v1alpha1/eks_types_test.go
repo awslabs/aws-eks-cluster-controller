@@ -25,7 +25,6 @@ func TestStorageEKS(t *testing.T) {
 			CrossAccountRoleName: "arn::::role/foo",
 			ControlPlane: ControlPlaneSpec{
 				ClusterName: "ClusterFoo",
-				StackName:   "StackFoo",
 			},
 			NodeGroups: []NodeGroupSpec{
 				NodeGroupSpec{},

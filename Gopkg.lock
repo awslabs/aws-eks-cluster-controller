@@ -10,7 +10,7 @@
   version = "v0.33.1"
 
 [[projects]]
-  digest = "1:d8ddea82593d2aec510712790607307f7cd814abfd4cf82fa53cc4df1c070dfe"
+  digest = "1:ebc308a5205d104f89ab69615dbf654046904a70df42d2ec2dfdeb5865e04b82"
   name = "github.com/aws/aws-sdk-go"
   packages = [
     "aws",
@@ -43,13 +43,15 @@
     "private/protocol/rest",
     "private/protocol/restjson",
     "private/protocol/xml/xmlutil",
+    "service/cloudformation",
+    "service/cloudformation/cloudformationiface",
     "service/eks",
     "service/eks/eksiface",
     "service/sts",
   ]
   pruneopts = "T"
-  revision = "89734ade0df0a4a437cbf4aa9c14e17daf37c5ac"
-  version = "v1.15.86"
+  revision = "180cc10e5ff368b86dee226b034af7d1672baec6"
+  version = "v1.15.87"
 
 [[projects]]
   digest = "1:9f42202ac457c462ad8bb9642806d275af9ab4850cf0b1960b9c6f083d4a309a"
@@ -900,6 +902,8 @@
     "github.com/aws/aws-sdk-go/aws",
     "github.com/aws/aws-sdk-go/aws/credentials/stscreds",
     "github.com/aws/aws-sdk-go/aws/session",
+    "github.com/aws/aws-sdk-go/service/cloudformation",
+    "github.com/aws/aws-sdk-go/service/cloudformation/cloudformationiface",
     "github.com/aws/aws-sdk-go/service/eks",
     "github.com/aws/aws-sdk-go/service/eks/eksiface",
     "github.com/emicklei/go-restful",
