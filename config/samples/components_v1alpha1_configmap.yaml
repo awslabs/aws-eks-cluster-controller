@@ -1,0 +1,15 @@
+apiVersion: components.eks.amazonaws.com/v1alpha1
+kind: ConfigMap
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: configmap-sample
+spec:
+  # Add fields here
+  name: testconfigmap
+  nameSpace: default
+  cluster: eks-sample
+  data:
+    key: |
+      - value1: someValue
+      - value2: otherValue
