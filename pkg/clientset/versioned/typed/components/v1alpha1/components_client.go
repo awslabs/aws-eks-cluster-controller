@@ -27,12 +27,17 @@ import (
 
 type ComponentsV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	ConfigMapsGetter
 	DeploymentsGetter
 }
 
 // ComponentsV1alpha1Client is used to interact with features provided by the components.eks.amazonaws.com group.
 type ComponentsV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *ComponentsV1alpha1Client) ConfigMaps(namespace string) ConfigMapInterface {
+	return newConfigMaps(c, namespace)
 }
 
 func (c *ComponentsV1alpha1Client) Deployments(namespace string) DeploymentInterface {

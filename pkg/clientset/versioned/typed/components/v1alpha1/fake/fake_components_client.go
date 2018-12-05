@@ -28,6 +28,10 @@ type FakeComponentsV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeComponentsV1alpha1) ConfigMaps(namespace string) v1alpha1.ConfigMapInterface {
+	return &FakeConfigMaps{c, namespace}
+}
+
 func (c *FakeComponentsV1alpha1) Deployments(namespace string) v1alpha1.DeploymentInterface {
 	return &FakeDeployments{c, namespace}
 }
