@@ -28,7 +28,10 @@ type DeploymentSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	appsv1.DeploymentSpec `json:",inline"`
-	Cluster               string `json:"cluster"`
+
+	Cluster   string `json:"cluster"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
 }
 
 func (spec DeploymentSpec) GetDeploymentSpec() appsv1.DeploymentSpec {
