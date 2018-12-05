@@ -122,8 +122,8 @@ type ReconcileDeployment struct {
 // TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
 // a Deployment as an example
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cluster.eks.amazonaws.com,resources=eks,verbs=get;list
 func (r *ReconcileDeployment) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the Deployment instance
 	log := r.log.With(
@@ -143,8 +143,7 @@ func (r *ReconcileDeployment) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{Requeue: false}, err
 	}
 
-	// TODO(user): Change this to be the object type created by your controller
-	// Define the desired Deployment object
+	remoteKey := types.NamespacedName{Namespace: instance.Spec.Namespace, Name: instance.Spec.Name}
 
 	cluster := &clusterv1alpha1.EKS{}
 	clusterKey := types.NamespacedName{Name: instance.Spec.Cluster, Namespace: instance.Namespace}
@@ -173,7 +172,7 @@ func (r *ReconcileDeployment) Reconcile(request reconcile.Request) (reconcile.Re
 			}
 
 			found := &appsv1.Deployment{}
-			if err := client.Get(context.TODO(), request.NamespacedName, found); err != nil {
+			if err := client.Get(context.TODO(), remoteKey, found); err != nil {
 				log.Error("could not get remote deployment", zap.Error(err))
 				return reconcile.Result{}, nil
 			}
@@ -187,15 +186,15 @@ func (r *ReconcileDeployment) Reconcile(request reconcile.Request) (reconcile.Re
 
 	rDeployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        instance.Name,
-			Namespace:   instance.Namespace,
+			Name:        instance.Spec.Name,
+			Namespace:   instance.Spec.Namespace,
 			Labels:      instance.Labels,
 			Annotations: instance.Annotations,
 		},
 		Spec: instance.Spec.GetDeploymentSpec(),
 	}
 	found := &appsv1.Deployment{}
-	err = client.Get(context.TODO(), request.NamespacedName, found)
+	err = client.Get(context.TODO(), remoteKey, found)
 	if err != nil && errors.IsNotFound(err) {
 		log.Info("creating deployment")
 
