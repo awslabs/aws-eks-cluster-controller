@@ -5,6 +5,8 @@ import (
 	"time"
 
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
+	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
+
 	"github.com/onsi/gomega"
 	"golang.org/x/net/context"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,6 +23,7 @@ var expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Nam
 var controlPlaneKey = types.NamespacedName{Name: "foo-controlplane", Namespace: "default"}
 var nodeGroup1Key = types.NamespacedName{Name: "foo-nodegroup-group1", Namespace: "default"}
 var nodeGroup2Key = types.NamespacedName{Name: "foo-nodegroup-group2", Namespace: "default"}
+var configmapKey = types.NamespacedName{Name: "foo-configmap-aws-auth", Namespace: "default"}
 var eksKey = types.NamespacedName{Name: "foo", Namespace: "default"}
 
 const timeout = time.Second * 5
@@ -96,6 +99,11 @@ func TestReconcile(t *testing.T) {
 	g.Expect(c.Update(context.TODO(), nodeGroup2)).Should(gomega.Succeed())
 
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
+
+	configmap := &componentsv1alpha1.ConfigMap{}
+	g.Eventually(func() error { return c.Get(context.TODO(), configmapKey, configmap) }, timeout).
+		Should(gomega.Succeed())
+
 	g.Eventually(func() (string, error) {
 		eks := &clusterv1alpha1.EKS{}
 		err := c.Get(context.TODO(), eksKey, eks)
@@ -110,6 +118,11 @@ func TestReconcile(t *testing.T) {
 		for range requests {
 		}
 	}()
+	g.Eventually(func() error { return c.Get(context.TODO(), configmapKey, configmap) }).ShouldNot(gomega.Succeed())
+	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup1Key, nodeGroup1) }).ShouldNot(gomega.Succeed())
+	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup2Key, nodeGroup2) }).ShouldNot(gomega.Succeed())
+	g.Eventually(func() error { return c.Get(context.TODO(), controlPlaneKey, controlPlane) }).ShouldNot(gomega.Succeed())
 
 	g.Eventually(func() error { return c.Get(context.TODO(), eksKey, instance) }).ShouldNot(gomega.Succeed())
+
 }
