@@ -2,12 +2,20 @@ package nodegroup
 
 import (
 	"context"
-	"time"
+	"fmt"
 
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/helpers"
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -16,26 +24,29 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var (
-	StatusCreating = "Creating Node Groups"
-	StatusComplete = "Complete"
-)
+// newReconciler returns a new reconcile.Reconciler
+func newReconciler(mgr manager.Manager) reconcile.Reconciler {
+	return &ReconcileNodeGroup{
+		Client: mgr.GetClient(),
+		scheme: mgr.GetScheme(),
+		log:    logging.New(),
+		sess:   session.Must(session.NewSession()),
+	}
+}
 
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
+// ReconcileNodeGroup reconciles a NodeGroup object
+type ReconcileNodeGroup struct {
+	client.Client
+	scheme *runtime.Scheme
+	log    *zap.Logger
+	sess   *session.Session
+}
 
 // Add creates a new NodeGroup Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 // USER ACTION REQUIRED: update cmd/manager/main.go to call this cluster.Add(mgr) to install this Controller
 func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
-}
-
-// newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileNodeGroup{Client: mgr.GetClient(), scheme: mgr.GetScheme()}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -67,11 +78,14 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 var _ reconcile.Reconciler = &ReconcileNodeGroup{}
 
-// ReconcileNodeGroup reconciles a NodeGroup object
-type ReconcileNodeGroup struct {
-	client.Client
-	scheme *runtime.Scheme
-}
+var (
+	StatusCreateComplete = "Create Node Group Complete"
+	StatusCreateFailed   = "Create Node Group Failed"
+	StatusError          = "Node Group Error"
+	// ControlPlaneStackFinalizer = "cfn-stack.controlplane.eks.amazonaws.com"
+	// KK TODO : need to finalize a place for the yaml to live in.
+	NodeGroupCFNTemplate = "templates/nodes.yaml"
+)
 
 // Reconcile reads that state of the cluster for a NodeGroup object and makes changes based on the state read
 // and what is in the NodeGroup.Spec
@@ -81,6 +95,12 @@ type ReconcileNodeGroup struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cluster.eks.amazonaws.com,resources=nodegroups,verbs=get;list;watch;create;update;patch;delete
 func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	r.log = r.log.With(
+		zap.String("Kind", "NodeGroup"),
+		zap.String("Name", request.Name),
+		zap.String("NameSpace", request.Namespace),
+	)
+
 	// Fetch the NodeGroup instance
 	instance := &clusterv1alpha1.NodeGroup{}
 	err := r.Get(context.TODO(), request.NamespacedName, instance)
@@ -94,12 +114,90 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, err
 	}
 
-	time.Sleep(time.Second * 5)
+	r.log.Info("Got reconcile request for nodegroup")
 
-	instance.Status.Status = StatusComplete
-	err = r.Update(context.TODO(), instance)
-	if err != nil {
-		return reconcile.Result{}, err
+	if instance.Status.Status == StatusCreateComplete || instance.Status.Status == StatusCreateFailed {
+		return reconcile.Result{}, nil
 	}
-	return reconcile.Result{}, nil
+
+	labelsToVerify := []string{"eks.owner.name", "eks.owner.namespace"}
+	for _, label := range labelsToVerify {
+		if _, ok := instance.Labels[label]; !ok {
+			err := fmt.Errorf("%s label is missing from control plane", label)
+			return reconcile.Result{}, r.setNodeGroupError(instance, err.Error(), err)
+		}
+	}
+
+	eksCluster := &clusterv1alpha1.EKS{}
+	if err = r.Get(context.TODO(), types.NamespacedName{Name: instance.Labels["eks.owner.name"], Namespace: instance.Labels["eks.owner.namespace"]}, eksCluster); err != nil {
+		return reconcile.Result{}, r.setNodeGroupError(instance, "EKS cluster not found", err)
+	}
+
+	targetAccountSession, err := eksCluster.Spec.GetCrossAccountSession(r.sess)
+	if err != nil {
+		return reconcile.Result{}, r.setNodeGroupError(instance, "Error getting the cross account session", err)
+	}
+
+	cfnSvc := cloudformation.New(targetAccountSession)
+
+	r.log.Info(fmt.Sprintf("Creating eks-%s Node Group stack for %v account in %v", instance.Spec.Name, eksCluster.Spec.AccountID, eksCluster.Spec.Region))
+
+	if err = r.createNodeGroupStack(cfnSvc, instance, eksCluster); err != nil {
+		return reconcile.Result{}, r.setNodeGroupError(instance, "Error creating the nodegroup stack", err)
+	}
+
+	r.log.Info(fmt.Sprintf("Cloudformation stack created successfully eks-%s", instance.Spec.Name))
+
+	return reconcile.Result{}, r.setNodeGroupStatus(StatusCreateComplete, instance)
 }
+
+func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc *cloudformation.CloudFormation, nodegroup *clusterv1alpha1.NodeGroup, eks *clusterv1alpha1.EKS) error {
+	logger := r.log
+	var eksOptimizedAMIs = map[string]string{
+		"us-east-1": "ami-0440e4f6b9713faf6",
+		"us-west-2": "ami-0a54c984b9f908c81",
+		"eu-west-1": "ami-0c7a4976cb6fafd3a",
+	}
+
+	templateBody, err := helpers.GetCFNTemplateBody(NodeGroupCFNTemplate, map[string]string{
+		"ClusterName":           eks.Spec.ControlPlane.ClusterName,
+		"ControlPlaneStackName": "eks-" + eks.Spec.ControlPlane.ClusterName,
+		"AMI":                   eksOptimizedAMIs[eks.Spec.Region],
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// KK TODO: See what needs to be done with the *cloudformation.Stack object returned by the below function
+	temp, err := helpers.CreateAndDescribeStack(cfnSvc, &cloudformation.CreateStackInput{
+		TemplateBody: aws.String(templateBody),
+		StackName:    aws.String(fmt.Sprintf("eks-%s", nodegroup.Spec.Name)),
+		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
+		Tags: []*cloudformation.Tag{
+			{
+				Key:   aws.String("ClusterName"),
+				Value: aws.String(eks.Spec.ControlPlane.ClusterName),
+			},
+		},
+	})
+
+	logger.Info(fmt.Sprintf("______________Return from Create and Describe Stack %v", temp))
+
+	return err
+}
+
+func (r *ReconcileNodeGroup) setNodeGroupStatus(msg string, instance *clusterv1alpha1.NodeGroup) error {
+	instance.Status.Status = msg
+	return r.Update(context.TODO(), instance)
+}
+
+func (r *ReconcileNodeGroup) setNodeGroupError(instance *clusterv1alpha1.NodeGroup, errMsg string, err error) error {
+	r.log.Error(errMsg, zap.Error(err))
+	if setStatusError := r.setNodeGroupStatus(StatusError, instance); setStatusError != nil {
+		return setStatusError
+	}
+	return err
+}
+
+//KK TODO When implementing finalizers make sure to merge in https://github.com/awslabs/aws-eks-cluster-controller/pull/12

@@ -61,6 +61,6 @@ func TestReconcile(t *testing.T) {
 		err := c.Get(context.TODO(), ngKey, nodegroup)
 		return nodegroup.Status.Status, err
 	}, timeout).
-		Should(gomega.Equal(StatusComplete))
+		Should(gomega.Equal(StatusCreateComplete))
 
 }

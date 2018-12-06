@@ -36,12 +36,6 @@ type EKSStatus struct {
 	NodeGroups   *NodeGroupList `json:"nodeGroups,omitempty"`
 }
 
-var eksOptimizedAMIs = map[string]string{
-	"us-east-1": "ami-0440e4f6b9713faf6",
-	"us-west-2": "ami-0a54c984b9f908c81",
-	"eu-west-1": "ami-0c7a4976cb6fafd3a",
-}
-
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
