@@ -37,7 +37,7 @@ func TestEKSAuthorizer_GetKubeConfig(t *testing.T) {
 			args: args{eksCluster: &clusterv1alpha1.EKS{
 				Spec: clusterv1alpha1.EKSSpec{
 					AccountID:            "account1",
-					CrossAccountRoleName: "stuff",
+					CrossAccountRoleName: "roleArn",
 					Region:               "us-test-1",
 				},
 			}},
@@ -57,7 +57,7 @@ func TestEKSAuthorizer_GetKubeConfig(t *testing.T) {
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("EKSAuthorizer.GetKubeConfig() = %v, want %v", got, tt.want)
+				t.Errorf("EKSAuthorizer.GetKubeConfig() = %s, want %s", got, tt.want)
 			}
 		})
 	}
@@ -137,7 +137,7 @@ func Test_buildKubeconfig(t *testing.T) {
 			auth := &EKSAuthorizer{
 				log: zap.NewExample(),
 			}
-			got, err := auth.buildKubeconfig(tt.args.eksSvc, tt.args.clusterName, "roleArn")
+			got, err := auth.buildKubeconfig(tt.args.eksSvc, tt.args.clusterName, "arn:aws:iam::account1:role/roleArn")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("buildKubeconfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -173,7 +173,7 @@ users:
       - -i
       - Name1
       - -r
-      - roleArn
+      - arn:aws:iam::account1:role/roleArn
       command: aws-iam-authenticator
       env: null
 `
