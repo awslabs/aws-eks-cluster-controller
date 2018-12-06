@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
-	"github.com/awslabs/aws-eks-cluster-controller/pkg/helpers"
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/cfnhelper"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -84,7 +84,6 @@ var (
 	StatusError          = "Node Group Error"
 	// ControlPlaneStackFinalizer = "cfn-stack.controlplane.eks.amazonaws.com"
 	// KK TODO : need to finalize a place for the yaml to live in.
-	NodeGroupCFNTemplate = "templates/nodes.yaml"
 )
 
 // Reconcile reads that state of the cluster for a NodeGroup object and makes changes based on the state read
@@ -144,7 +143,7 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 
 	if err = r.createNodeGroupStack(cfnSvc, instance, eksCluster); err != nil {
 		r.setNodeGroupStatus(StatusCreateFailed, instance)
-		r.log.Error("Error creating the nodegroup stack", err)
+		r.log.Error("Error creating the nodegroup stack", zap.Error(err))
 		return reconcile.Result{}, err
 	}
 
@@ -160,7 +159,7 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc *cloudformation.CloudFo
 		"eu-west-1": "ami-0c7a4976cb6fafd3a",
 	}
 
-	templateBody, err := helpers.GetCFNTemplateBody(NodeGroupCFNTemplate, map[string]string{
+	templateBody, err := cfnhelper.GetCFNTemplateBody(nodeGroupCFNTemplate, map[string]string{
 		"ClusterName":           eks.Spec.ControlPlane.ClusterName,
 		"ControlPlaneStackName": "eks-" + eks.Spec.ControlPlane.ClusterName,
 		"AMI":                   eksOptimizedAMIs[eks.Spec.Region],
@@ -170,8 +169,7 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc *cloudformation.CloudFo
 		return err
 	}
 
-	// KK TODO: See what needs to be done with the *cloudformation.Stack object returned by the below function
-	temp, err := helpers.CreateAndDescribeStack(cfnSvc, &cloudformation.CreateStackInput{
+	_, err = cfnhelper.CreateAndDescribeStack(cfnSvc, &cloudformation.CreateStackInput{
 		TemplateBody: aws.String(templateBody),
 		StackName:    aws.String(fmt.Sprintf("eks-%s", nodegroup.Spec.Name)),
 		Capabilities: []*string{aws.String("CAPABILITY_IAM")},

@@ -1,10 +1,12 @@
 package cfnhelper
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/cloudformation/cloudformationiface"
+	"text/template"
 )
 
 func CreateAndDescribeStack(cfnSvc cloudformationiface.CloudFormationAPI, input *cloudformation.CreateStackInput) (*cloudformation.Stack, error) {
@@ -48,4 +50,16 @@ func DeleteStack(cfnSvc cloudformationiface.CloudFormationAPI, stackName string)
 	}
 
 	return nil
+}
+
+func GetCFNTemplateBody(cfnTemplate string, args map[string]string) (string, error) {
+	templatizedCFN, err := template.New("cfntemplate").Parse(cfnTemplate)
+	if err != nil {
+		return "", err
+	}
+	b := bytes.NewBuffer([]byte{})
+	if err := templatizedCFN.Execute(b, args); err != nil {
+		return "", err
+	}
+	return b.String(), nil
 }
