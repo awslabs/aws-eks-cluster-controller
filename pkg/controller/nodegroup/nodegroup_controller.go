@@ -143,7 +143,9 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 	r.log.Info(fmt.Sprintf("Creating eks-%s Node Group stack for %v account in %v", instance.Spec.Name, eksCluster.Spec.AccountID, eksCluster.Spec.Region))
 
 	if err = r.createNodeGroupStack(cfnSvc, instance, eksCluster); err != nil {
-		return reconcile.Result{}, r.setNodeGroupError(instance, "Error creating the nodegroup stack", err)
+		r.setNodeGroupStatus(StatusCreateFailed, instance)
+		r.log.Error("Error creating the nodegroup stack", err)
+		return reconcile.Result{}, err
 	}
 
 	r.log.Info(fmt.Sprintf("Cloudformation stack created successfully eks-%s", instance.Spec.Name))
@@ -152,7 +154,6 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 }
 
 func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc *cloudformation.CloudFormation, nodegroup *clusterv1alpha1.NodeGroup, eks *clusterv1alpha1.EKS) error {
-	logger := r.log
 	var eksOptimizedAMIs = map[string]string{
 		"us-east-1": "ami-0440e4f6b9713faf6",
 		"us-west-2": "ami-0a54c984b9f908c81",
@@ -182,8 +183,6 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc *cloudformation.CloudFo
 		},
 	})
 
-	logger.Info(fmt.Sprintf("______________Return from Create and Describe Stack %v", temp))
-
 	return err
 }
 
@@ -195,6 +194,7 @@ func (r *ReconcileNodeGroup) setNodeGroupStatus(msg string, instance *clusterv1a
 func (r *ReconcileNodeGroup) setNodeGroupError(instance *clusterv1alpha1.NodeGroup, errMsg string, err error) error {
 	r.log.Error(errMsg, zap.Error(err))
 	if setStatusError := r.setNodeGroupStatus(StatusError, instance); setStatusError != nil {
+		r.log.Error("Error setting the status", zap.Error(setStatusError))
 		return setStatusError
 	}
 	return err
