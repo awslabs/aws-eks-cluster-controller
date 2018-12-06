@@ -6,11 +6,14 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
 
 	"go.uber.org/zap"
 
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
+	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/controller/controlplane"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/finalizers"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -74,6 +77,15 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	if err != nil {
 		return err
 	}
+	err = c.Watch(&source.Kind{
+		Type: &componentsv1alpha1.ConfigMap{}},
+		&handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &clusterv1alpha1.EKS{},
+		})
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -97,9 +109,9 @@ type ReconcileEKS struct {
 // TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
 // a Deployment as an example
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
-// +kubebuilder:rbac:groups=cluster.eks.amazonaws.com,resources=controlplane,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=cluster.eks.amazonaws.com,resources=nodegroup,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=cluster.eks.amazonaws.com,resources=eks,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cluster.eks.amazonaws.com,resources=controlplane;nodegroup;eks,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=configmap,verbs=get;list;watch;create;update;patch;delete
+
 func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the EKS instance
 	logger := r.log.With(
@@ -196,13 +208,63 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
-	instance.Status.Status = "Complete"
-
-	err = r.Update(context.TODO(), instance)
+	err = r.createConfigMap(instance)
 	if err != nil {
+		logger.Error("failed to create configmap")
 		return reconcile.Result{}, err
 	}
+
+	if instance.Status.Status != "Complete" {
+		instance.Status.Status = "Complete"
+
+		err = r.Update(context.TODO(), instance)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	}
 	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileEKS) createConfigMap(instance *clusterv1alpha1.EKS) error {
+	labels := map[string]string{
+		"eks.owner":           fmt.Sprintf("%s_%s", instance.Namespace, instance.Name),
+		"eks.owner.name":      instance.Name,
+		"eks.owner.namespace": instance.Namespace,
+	}
+	for k, v := range instance.Labels {
+		labels[k] = v
+	}
+
+	configMap := &componentsv1alpha1.ConfigMap{}
+	err := r.Get(context.TODO(), types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name + "-configmap-aws-auth"}, configMap)
+	if err != nil && errors.IsNotFound(err) {
+		configMap = &componentsv1alpha1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        instance.Name + "-configmap-aws-auth",
+				Namespace:   instance.Namespace,
+				Labels:      labels,
+				Annotations: instance.Annotations,
+			},
+			Spec: componentsv1alpha1.ConfigMapSpec{
+				Name:      "aws-auth",
+				NameSpace: "kube-system",
+				Cluster:   instance.Name,
+				Data: map[string]string{
+					"mapRoles": instance.GetAWSAuthData(),
+				},
+			},
+		}
+		r.log.Info("Creating configmap", zap.String("Configmap", fmt.Sprintf("%+v", *configMap)))
+		err = r.Create(context.TODO(), configMap)
+		if err != nil {
+			return err
+		}
+
+	}
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *ReconcileEKS) createControlPlane(instance *clusterv1alpha1.EKS) (string, error) {

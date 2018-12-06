@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
@@ -80,4 +81,30 @@ func (e EKSSpec) GetCrossAccountSession(rootSession *session.Session) (*session.
 		Region:      aws.String(e.Region),
 		Credentials: stscreds.NewCredentials(rootSession, fmt.Sprintf("arn:aws:iam::%s:role/%s", e.AccountID, e.CrossAccountRoleName)),
 	})
+}
+
+func (e EKS) GetAWSAuthData() string {
+	authString := "- groups:\n  - system:bootstrappers\n  - system:nodes\n  rolearn: %s\n  username: system:node:{{EC2PrivateDNSName}}\n"
+	if len(e.Spec.NodeGroups) == 0 {
+		return ""
+	}
+	auths := []string{}
+	for _, ngName := range e.GetNodegroupNames() {
+
+		auth := fmt.Sprintf(authString, getRoleARN(e.Spec.AccountID, ngName))
+		auths = append(auths, auth)
+	}
+	return strings.Join(auths, "")
+
+}
+func (e EKS) GetNodegroupNames() []string {
+	names := make([]string, 0, len(e.Spec.NodeGroups))
+	for _, ng := range e.Spec.NodeGroups {
+		names = append(names, strings.ToLower(fmt.Sprintf("%s-nodegroup-%s", e.Name, ng.Name)))
+	}
+	return names
+}
+
+func getRoleARN(account, name string) string {
+	return fmt.Sprintf("arn:aws:iam::%s:role/%s-role", account, name)
 }

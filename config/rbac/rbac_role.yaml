@@ -80,18 +80,8 @@ rules:
   - cluster.eks.amazonaws.com
   resources:
   - controlplane
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - cluster.eks.amazonaws.com
-  resources:
   - nodegroup
+  - eks
   verbs:
   - get
   - list
@@ -101,9 +91,9 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - cluster.eks.amazonaws.com
+  - components.eks.amazonaws.com
   resources:
-  - eks
+  - configmap
   verbs:
   - get
   - list
