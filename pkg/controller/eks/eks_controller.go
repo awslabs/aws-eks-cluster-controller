@@ -137,6 +137,11 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		logger.Info("deleting eks")
+		if err := r.deleteConfigmap(instance); err != nil {
+			logger.Error("Error Deleting Configmap", zap.Error(err))
+			return reconcile.Result{}, err
+		}
+
 		if finalizers.HasFinalizer(instance, NodeGroupFinalizer) {
 			result, err := r.deleteNodeGroups(instance, logger)
 			if err != nil {
@@ -265,6 +270,24 @@ func (r *ReconcileEKS) createConfigMap(instance *clusterv1alpha1.EKS) error {
 		return err
 	}
 	return nil
+}
+
+func (r *ReconcileEKS) deleteConfigmap(instance *clusterv1alpha1.EKS) error {
+	configmap := &componentsv1alpha1.ConfigMap{}
+	configmapKey := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Name + "-configmap-aws-auth"}
+	err := r.Get(context.TODO(), configmapKey, configmap)
+	if err != nil && errors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	err = r.Delete(context.TODO(), configmap)
+	if err != nil {
+		return err
+	}
+	return nil
+
 }
 
 func (r *ReconcileEKS) createControlPlane(instance *clusterv1alpha1.EKS) (string, error) {

@@ -118,6 +118,11 @@ func TestReconcile(t *testing.T) {
 		for range requests {
 		}
 	}()
+	g.Eventually(func() error { return c.Get(context.TODO(), configmapKey, configmap) }).ShouldNot(gomega.Succeed())
+	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup1Key, nodeGroup1) }).ShouldNot(gomega.Succeed())
+	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup2Key, nodeGroup2) }).ShouldNot(gomega.Succeed())
+	g.Eventually(func() error { return c.Get(context.TODO(), controlPlaneKey, controlPlane) }).ShouldNot(gomega.Succeed())
 
 	g.Eventually(func() error { return c.Get(context.TODO(), eksKey, instance) }).ShouldNot(gomega.Succeed())
+
 }
