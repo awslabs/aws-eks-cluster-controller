@@ -7,6 +7,8 @@ metadata:
 spec:
   # Add fields here
   cluster: eks-sample
+  name: nginx-deployment
+  namespace: default
   selector:
     matchLabels:
       app: nginx-deployment

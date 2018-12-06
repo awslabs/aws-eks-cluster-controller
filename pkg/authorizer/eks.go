@@ -2,6 +2,7 @@ package authorizer
 
 import (
 	"bytes"
+	"fmt"
 	"text/template"
 
 	"github.com/aws/aws-sdk-go/service/eks/eksiface"
@@ -38,7 +39,9 @@ func (e *EKSAuthorizer) GetKubeConfig(eksCluster *clusterv1alpha1.EKS) ([]byte, 
 	if eksSvc == nil {
 		eksSvc = eks.New(sess)
 	}
-	return e.buildKubeconfig(eksSvc, eksCluster.Spec.ControlPlane.ClusterName)
+
+	roleARN := fmt.Sprintf("arn:aws:iam::%s:role/%s", eksCluster.Spec.AccountID, eksCluster.Spec.CrossAccountRoleName)
+	return e.buildKubeconfig(eksSvc, eksCluster.Spec.ControlPlane.ClusterName, roleARN)
 }
 
 func (e *EKSAuthorizer) GetClient(eksCluster *clusterv1alpha1.EKS) (client.Client, error) {
@@ -52,7 +55,14 @@ func (e *EKSAuthorizer) GetClient(eksCluster *clusterv1alpha1.EKS) (client.Clien
 
 var _ Authorizer = &EKSAuthorizer{}
 
-func (e *EKSAuthorizer) buildKubeconfig(eksSvc eksiface.EKSAPI, clusterName string) ([]byte, error) {
+type templateData struct {
+	Name                     string
+	Endpoint                 string
+	CertificateAuthorityData string
+	RoleARN                  string
+}
+
+func (e *EKSAuthorizer) buildKubeconfig(eksSvc eksiface.EKSAPI, clusterName, roleArn string) ([]byte, error) {
 	log := e.log.With(zap.String("ClusterName", clusterName))
 
 	r, err := eksSvc.DescribeCluster(&eks.DescribeClusterInput{
@@ -69,8 +79,15 @@ func (e *EKSAuthorizer) buildKubeconfig(eksSvc eksiface.EKSAPI, clusterName stri
 		return nil, err
 	}
 
+	data := templateData{
+		Name:                     *r.Cluster.Name,
+		Endpoint:                 *r.Cluster.Endpoint,
+		CertificateAuthorityData: *r.Cluster.CertificateAuthority.Data,
+		RoleARN:                  roleArn,
+	}
+
 	b := bytes.NewBuffer([]byte{})
-	if err := kubeconfigTemplate.Execute(b, r.Cluster); err != nil {
+	if err := kubeconfigTemplate.Execute(b, data); err != nil {
 		log.Error("failed to apply the template", zap.Error(err))
 		return nil, err
 	}
@@ -81,7 +98,7 @@ func (e *EKSAuthorizer) buildKubeconfig(eksSvc eksiface.EKSAPI, clusterName stri
 var kubeconfig = `apiVersion: v1
 clusters:
 - cluster:
-    certificate-authority-data: {{ .CertificateAuthority.Data }}
+    certificate-authority-data: {{ .CertificateAuthorityData }}
     server: {{ .Endpoint }}
   name: {{ .Name }}
 contexts:
@@ -101,6 +118,8 @@ users:
       - token
       - -i
       - {{ .Name }}
+      - -r
+      - {{ .RoleARN }}
       command: aws-iam-authenticator
       env: null
 `

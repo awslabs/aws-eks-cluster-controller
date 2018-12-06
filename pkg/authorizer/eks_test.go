@@ -137,7 +137,7 @@ func Test_buildKubeconfig(t *testing.T) {
 			auth := &EKSAuthorizer{
 				log: zap.NewExample(),
 			}
-			got, err := auth.buildKubeconfig(tt.args.eksSvc, tt.args.clusterName)
+			got, err := auth.buildKubeconfig(tt.args.eksSvc, tt.args.clusterName, "roleArn")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("buildKubeconfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -172,6 +172,8 @@ users:
       - token
       - -i
       - Name1
+      - -r
+      - roleArn
       command: aws-iam-authenticator
       env: null
 `
