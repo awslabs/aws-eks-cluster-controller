@@ -109,8 +109,8 @@ type ReconcileEKS struct {
 // TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
 // a Deployment as an example
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
-// +kubebuilder:rbac:groups=cluster.eks.amazonaws.com,resources=controlplane;nodegroup;eks,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=configmap,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cluster.eks.amazonaws.com,resources=controlplanes;nodegroups;ekss,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the EKS instance
