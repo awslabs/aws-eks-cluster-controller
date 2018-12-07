@@ -74,9 +74,9 @@ rules:
 - apiGroups:
   - cluster.eks.amazonaws.com
   resources:
-  - controlplane
-  - nodegroup
-  - eks
+  - controlplanes
+  - nodegroups
+  - ekss
   verbs:
   - get
   - list
@@ -88,7 +88,7 @@ rules:
 - apiGroups:
   - components.eks.amazonaws.com
   resources:
-  - configmap
+  - configmaps
   verbs:
   - get
   - list

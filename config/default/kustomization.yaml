@@ -1,12 +1,12 @@
 # Adds namespace to all resources.
-namespace: aws-eks-cluster-operator-system
+namespace: aws-eks-cluster-controller-system
 
 # Value of this field is prepended to the
 # names of all resources, e.g. a deployment named
 # "wordpress" becomes "alices-wordpress".
 # Note that it should also match with the prefix (text before '-') of the namespace
 # field above.
-namePrefix: aws-eks-cluster-operator-
+namePrefix: aws-eks-cluster-controller-
 
 # Labels to add to all resources and selectors.
 #commonLabels:
