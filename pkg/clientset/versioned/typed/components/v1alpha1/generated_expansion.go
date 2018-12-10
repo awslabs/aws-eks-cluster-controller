@@ -21,3 +21,5 @@ package v1alpha1
 type ConfigMapExpansion interface{}
 
 type DeploymentExpansion interface{}
+
+type IngressExpansion interface{}
