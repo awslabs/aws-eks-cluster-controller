@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 
-package configmap
+package ingress
 
 import (
 	"context"
@@ -25,7 +25,7 @@ import (
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/finalizers"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
 	"go.uber.org/zap"
-	corev1 "k8s.io/api/core/v1"
+	extv1beta "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,7 +41,7 @@ import (
 )
 
 var (
-	ConfigMapFinalizer = "configmap.components.eks.amazon.com"
+	IngressFinalizer = "ingress.components.eks.amazon.com"
 )
 
 /**
@@ -49,7 +49,7 @@ var (
 * business logic.  Delete these comments after modifying this file.*
  */
 
-// Add creates a new ConfigMap Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
+// Add creates a new Ingress Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 // USER ACTION REQUIRED: update cmd/manager/main.go to call this components.Add(mgr) to install this Controller
 func Add(mgr manager.Manager) error {
@@ -60,7 +60,7 @@ func Add(mgr manager.Manager) error {
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	sess := session.Must(session.NewSession())
 	log := logging.New()
-	return &ReconcileConfigMap{
+	return &ReconcileIngress{
 		Client: mgr.GetClient(),
 		scheme: mgr.GetScheme(),
 		log:    log,
@@ -72,27 +72,27 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
-	c, err := controller.New("configmap-controller", mgr, controller.Options{Reconciler: r})
+	c, err := controller.New("ingress-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
 	}
 
-	// Watch for changes to ConfigMap
-	err = c.Watch(&source.Kind{Type: &componentsv1alpha1.ConfigMap{}}, &handler.EnqueueRequestForObject{})
+	// Watch for changes to Ingress
+	err = c.Watch(&source.Kind{Type: &componentsv1alpha1.Ingress{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
 	// TODO(user): Modify this to be the types you create
-	// Uncomment watch a Deployment created by ConfigMap - change this for objects you create
+	// Uncomment watch a Deployment created by Ingress - change this for objects you create
 
 	return nil
 }
 
-var _ reconcile.Reconciler = &ReconcileConfigMap{}
+var _ reconcile.Reconciler = &ReconcileIngress{}
 
-// ReconcileConfigMap reconciles a ConfigMap object
-type ReconcileConfigMap struct {
+// ReconcileIngress reconciles a Ingress object
+type ReconcileIngress struct {
 	client.Client
 	scheme *runtime.Scheme
 	log    *zap.Logger
@@ -100,22 +100,21 @@ type ReconcileConfigMap struct {
 	auth   authorizer.Authorizer
 }
 
-// Reconcile reads that state of the cluster for a ConfigMap object and makes changes based on the state read
-// and what is in the ConfigMap.Spec
+// Reconcile reads that state of the cluster for a Ingress object and makes changes based on the state read
+// and what is in the Ingress.Spec
 // TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
 // a Deployment as an example
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-func (r *ReconcileConfigMap) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	// Fetch the ConfigMap instance
+// +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	// Fetch the Ingress instance
 	log := r.log.With(
 		zap.String("Name", request.Name),
 		zap.String("Namespace", request.Namespace),
-		zap.String("Kind", "configmap.components.eks.amazon.com"),
+		zap.String("Kind", "ingress.components.eks.amazon.com"),
 	)
-
-	instance := &componentsv1alpha1.ConfigMap{}
+	instance := &componentsv1alpha1.Ingress{}
 	err := r.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -145,75 +144,78 @@ func (r *ReconcileConfigMap) Reconcile(request reconcile.Request) (reconcile.Res
 		log.Error("could not access remote cluster", zap.Error(err))
 		return reconcile.Result{}, err
 	}
-	log.Info("got remote client")
+	log.Info("got client")
 
-	// if deleting - Delete remote config map
+	// TODO: if deleting - Delete remote ingress
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
-		if finalizers.HasFinalizer(instance, ConfigMapFinalizer) {
-			log.Info("deleting config map")
-			instance.Finalizers = finalizers.RemoveFinalizer(instance, ConfigMapFinalizer)
+		if finalizers.HasFinalizer(instance, IngressFinalizer) {
+			log.Info("deleting ingress")
+			instance.Finalizers = finalizers.RemoveFinalizer(instance, IngressFinalizer)
 			if err := r.Client.Update(context.TODO(), instance); err != nil {
 				return reconcile.Result{}, err
 			}
 
-			found := &corev1.ConfigMap{}
+			found := &extv1beta.Ingress{}
 			if err := client.Get(context.TODO(), remoteKey, found); err != nil {
-				log.Error("could not get remote configmap", zap.Error(err))
+				log.Error("could not get remote ingress", zap.Error(err))
 				return reconcile.Result{}, nil
 			}
 			if err := client.Delete(context.TODO(), found); err != nil {
-				log.Error("could not delete remote configmap", zap.Error(err))
+				log.Error("could not delete remote ingress", zap.Error(err))
 				return reconcile.Result{}, nil
 			}
-			log.Info("configmap deleted")
+			log.Info("ingress deleted")
 			return reconcile.Result{}, nil
 
 		}
 	}
 
-	rConfigMap := &corev1.ConfigMap{
+	rIngress := &extv1beta.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        instance.Spec.Name,
 			Namespace:   instance.Spec.NameSpace,
 			Labels:      instance.Labels,
 			Annotations: instance.Annotations,
 		},
-		Data:       instance.Spec.Data,
-		BinaryData: instance.Spec.BinaryData,
+		Spec: instance.Spec.IngressSpec,
 	}
-	found := &corev1.ConfigMap{}
+	found := &extv1beta.Ingress{}
 	err = client.Get(context.TODO(), remoteKey, found)
 	if err != nil && errors.IsNotFound(err) {
-		log.Info("creating configmap")
+		log.Info("creating ingress")
 
-		if err := client.Create(context.TODO(), rConfigMap); err != nil {
-			log.Error("failed to create remote configmap", zap.Error(err))
+		if err := client.Create(context.TODO(), rIngress); err != nil {
+			log.Error("failed to create remote ingress", zap.Error(err))
 			return reconcile.Result{}, err
 		}
-		instance.Finalizers = []string{ConfigMapFinalizer}
+		instance.Finalizers = []string{IngressFinalizer}
 		instance.Status.Status = "Created"
 		if err := r.Client.Update(context.TODO(), instance); err != nil {
-			log.Error("failed to update configmap", zap.Error(err))
+			log.Error("failed to create ingress", zap.Error(err))
 			return reconcile.Result{}, err
 		}
-		log.Info("configmap created")
+		log.Info("ingress created")
 		return reconcile.Result{}, nil
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// remote configmap found, check and update if required
-	log.Info("found remote configmap")
-	if !reflect.DeepEqual(found.Data, rConfigMap.Data) || !reflect.DeepEqual(found.BinaryData, rConfigMap.BinaryData) {
-		found.Data = rConfigMap.Data
-		found.BinaryData = rConfigMap.BinaryData
-		log.Info("updating configmap")
+	log.Info("found remote ingress")
+	if !reflect.DeepEqual(found.Spec, rIngress.Spec) {
+		found.Spec = rIngress.Spec
+		log.Info("updating ingress")
 		err := client.Update(context.TODO(), found)
 		if err != nil {
-			log.Error("failed to update remote config map", zap.Error(err))
+			log.Error("failed to update remote ingress", zap.Error(err))
 			return reconcile.Result{}, err
 		}
-		log.Info("configmap updated")
+		log.Info("ingress updated")
+	}
+
+	instance.Status.IngressStatus = found.Status
+	if err := r.Client.Update(context.TODO(), instance); err != nil {
+		log.Error("failed to update status of ingress", zap.Error(err))
+		return reconcile.Result{}, err
 	}
 
 	return reconcile.Result{}, nil

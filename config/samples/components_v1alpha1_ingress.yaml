@@ -1,0 +1,19 @@
+apiVersion: components.eks.amazonaws.com/v1alpha1
+kind: Ingress
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  name: ingress-sample
+spec:
+  name: remote-ingress-sample
+  nameSpace: default    # remote k8s cluster namespace
+  cluster: eks-sample
+  rules:
+  - http:
+      paths:
+      - path: /testpath
+        backend:
+          serviceName: test
+          servicePort: 80
