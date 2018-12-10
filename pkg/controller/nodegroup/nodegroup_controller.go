@@ -6,6 +6,7 @@ import (
 
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/cfnhelper"
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/finalizers"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -81,9 +82,9 @@ var _ reconcile.Reconciler = &ReconcileNodeGroup{}
 var (
 	StatusCreateComplete = "Create Node Group Complete"
 	StatusCreateFailed   = "Create Node Group Failed"
+	StatusDeleteFailed   = "Delete Node Group Failed"
 	StatusError          = "Node Group Error"
-	// ControlPlaneStackFinalizer = "cfn-stack.controlplane.eks.amazonaws.com"
-	// KK TODO : need to finalize a place for the yaml to live in.
+	FinalizerCFNStack    = "cfn-stack.nodegroup.eks.amazonaws.com"
 )
 
 // Reconcile reads that state of the cluster for a NodeGroup object and makes changes based on the state read
@@ -94,7 +95,7 @@ var (
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cluster.eks.amazonaws.com,resources=nodegroups,verbs=get;list;watch;create;update;patch;delete
 func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	r.log = r.log.With(
+	logger := r.log.With(
 		zap.String("Kind", "NodeGroup"),
 		zap.String("Name", request.Name),
 		zap.String("NameSpace", request.Namespace),
@@ -113,42 +114,65 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, err
 	}
 
-	r.log.Info("Got reconcile request for nodegroup")
-
-	if instance.Status.Status == StatusCreateComplete || instance.Status.Status == StatusCreateFailed {
-		return reconcile.Result{}, nil
-	}
+	logger.Info("Got reconcile request for nodegroup")
 
 	labelsToVerify := []string{"eks.owner.name", "eks.owner.namespace"}
 	for _, label := range labelsToVerify {
 		if _, ok := instance.Labels[label]; !ok {
 			err := fmt.Errorf("%s label is missing from control plane", label)
-			return reconcile.Result{}, r.setNodeGroupError(instance, err.Error(), err)
+			return reconcile.Result{}, r.setNodeGroupError(instance, err.Error(), err, logger)
 		}
 	}
 
 	eksCluster := &clusterv1alpha1.EKS{}
 	if err = r.Get(context.TODO(), types.NamespacedName{Name: instance.Labels["eks.owner.name"], Namespace: instance.Labels["eks.owner.namespace"]}, eksCluster); err != nil {
-		return reconcile.Result{}, r.setNodeGroupError(instance, "EKS cluster not found", err)
+		return reconcile.Result{}, r.setNodeGroupError(instance, "EKS cluster not found", err, logger)
 	}
 
 	targetAccountSession, err := eksCluster.Spec.GetCrossAccountSession(r.sess)
 	if err != nil {
-		return reconcile.Result{}, r.setNodeGroupError(instance, "Error getting the cross account session", err)
+		return reconcile.Result{}, r.setNodeGroupError(instance, "Error getting the cross account session", err, logger)
 	}
 
 	cfnSvc := cloudformation.New(targetAccountSession)
 
-	r.log.Info(fmt.Sprintf("Creating eks-%s Node Group stack for %v account in %v", instance.Spec.Name, eksCluster.Spec.AccountID, eksCluster.Spec.Region))
+	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		if finalizers.HasFinalizer(instance, FinalizerCFNStack) {
+			logger.Info("deleting nodegroup cloudformation stack", zap.String("AWSAccountID", eksCluster.Spec.AccountID), zap.String("AWSRegion", eksCluster.Spec.Region), zap.String("StackName", getCFNStackName(instance)))
+
+			err = cfnhelper.DeleteStack(cfnSvc, getCFNStackName(instance))
+			if err != nil {
+				logger.Error("error deleting node group cloudformation stack", zap.Error(err))
+				r.setNodeGroupStatus(StatusDeleteFailed, instance)
+				return reconcile.Result{}, err
+			}
+			logger.Info("cloudformation stack deleted successfully", zap.String("StackName", getCFNStackName(instance)))
+
+			instance.SetFinalizers(finalizers.RemoveFinalizer(instance, FinalizerCFNStack))
+			err = r.Update(context.TODO(), instance)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	if instance.Status.Status == StatusCreateComplete || instance.Status.Status == StatusCreateFailed {
+		return reconcile.Result{}, nil
+	}
+
+	logger.Info(fmt.Sprintf("Creating eks-%s Node Group stack for %v account in %v", instance.Spec.Name, eksCluster.Spec.AccountID, eksCluster.Spec.Region))
 
 	if err = r.createNodeGroupStack(cfnSvc, instance, eksCluster); err != nil {
 		r.setNodeGroupStatus(StatusCreateFailed, instance)
-		r.log.Error("Error creating the nodegroup stack", zap.Error(err))
+		logger.Error("Error creating the nodegroup stack", zap.Error(err))
 		return reconcile.Result{}, err
 	}
 
-	r.log.Info(fmt.Sprintf("Cloudformation stack created successfully eks-%s", instance.Spec.Name))
+	logger.Info(fmt.Sprintf("Cloudformation stack created successfully %s", getCFNStackName(instance)))
 
+	instance.SetFinalizers(finalizers.AddFinalizer(instance, FinalizerCFNStack))
 	return reconcile.Result{}, r.setNodeGroupStatus(StatusCreateComplete, instance)
 }
 
@@ -171,7 +195,7 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc *cloudformation.CloudFo
 
 	_, err = cfnhelper.CreateAndDescribeStack(cfnSvc, &cloudformation.CreateStackInput{
 		TemplateBody: aws.String(templateBody),
-		StackName:    aws.String(fmt.Sprintf("eks-%s", nodegroup.Spec.Name)),
+		StackName:    aws.String(getCFNStackName(nodegroup)),
 		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 		Tags: []*cloudformation.Tag{
 			{
@@ -189,8 +213,8 @@ func (r *ReconcileNodeGroup) setNodeGroupStatus(msg string, instance *clusterv1a
 	return r.Update(context.TODO(), instance)
 }
 
-func (r *ReconcileNodeGroup) setNodeGroupError(instance *clusterv1alpha1.NodeGroup, errMsg string, err error) error {
-	r.log.Error(errMsg, zap.Error(err))
+func (r *ReconcileNodeGroup) setNodeGroupError(instance *clusterv1alpha1.NodeGroup, errMsg string, err error, logger *zap.Logger) error {
+	logger.Error(errMsg, zap.Error(err))
 	if setStatusError := r.setNodeGroupStatus(StatusError, instance); setStatusError != nil {
 		r.log.Error("Error setting the status", zap.Error(setStatusError))
 		return setStatusError
@@ -198,4 +222,6 @@ func (r *ReconcileNodeGroup) setNodeGroupError(instance *clusterv1alpha1.NodeGro
 	return err
 }
 
-//KK TODO When implementing finalizers make sure to merge in https://github.com/awslabs/aws-eks-cluster-controller/pull/12
+func getCFNStackName(instance *clusterv1alpha1.NodeGroup) string {
+	return fmt.Sprintf("eks-%s", instance.Spec.Name)
+}
