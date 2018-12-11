@@ -71,7 +71,7 @@ func TestReconcile(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "foo-cm", Namespace: "default"},
 		Spec: componentsv1alpha1.ConfigMapSpec{
 			Name:      "remote-foo-cm",
-			NameSpace: "default",
+			Namespace: "default",
 			Cluster:   "foo-eks",
 			Data:      map[string]string{"key": "value"},
 		},

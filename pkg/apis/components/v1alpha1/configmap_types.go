@@ -29,7 +29,7 @@ type ConfigMapSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	Cluster   string `json:"cluster"`
 	Name      string `json:"name"`
-	NameSpace string `json:"nameSpace"`
+	Namespace string `json:"namespace"`
 
 	// +optional
 	Data map[string]string `json:"data,omitempty"`

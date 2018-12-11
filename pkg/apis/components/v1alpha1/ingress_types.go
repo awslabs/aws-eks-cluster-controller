@@ -32,7 +32,7 @@ type IngressSpec struct {
 
 	Cluster   string `json:"cluster"`
 	Name      string `json:"name"`
-	Namespace string `json:"nameSpace"`
+	Namespace string `json:"namespace"`
 }
 
 // IngressStatus defines the observed state of Ingress

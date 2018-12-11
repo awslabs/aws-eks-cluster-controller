@@ -144,6 +144,4 @@ func TestReconcile(t *testing.T) {
 
 	g.Expect(c.Delete(context.TODO(), instance)).Should(gomega.Succeed())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-	g.Eventually(func() error { return c.Get(context.TODO(), svcKey, rSvc) }).Should(gomega.HaveOccurred())
-
 }
