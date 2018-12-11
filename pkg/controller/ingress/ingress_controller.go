@@ -18,6 +18,9 @@ package ingress
 
 import (
 	"context"
+	"reflect"
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws/session"
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
@@ -30,14 +33,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"time"
 )
 
 var (
@@ -126,7 +127,7 @@ func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Resul
 		return reconcile.Result{}, err
 	}
 
-	remoteKey := types.NamespacedName{Namespace: instance.Spec.NameSpace, Name: instance.Spec.Name}
+	remoteKey := types.NamespacedName{Namespace: instance.Spec.Namespace, Name: instance.Spec.Name}
 
 	cluster := &clusterv1alpha1.EKS{}
 	clusterKey := types.NamespacedName{Name: instance.Spec.Cluster, Namespace: instance.Namespace}
@@ -146,7 +147,6 @@ func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Resul
 	}
 	log.Info("got client")
 
-	// TODO: if deleting - Delete remote ingress
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		if finalizers.HasFinalizer(instance, IngressFinalizer) {
 			log.Info("deleting ingress")
@@ -173,7 +173,7 @@ func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Resul
 	rIngress := &extv1beta.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        instance.Spec.Name,
-			Namespace:   instance.Spec.NameSpace,
+			Namespace:   instance.Spec.Namespace,
 			Labels:      instance.Labels,
 			Annotations: instance.Annotations,
 		},

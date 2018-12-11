@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/session"
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/authorizer"
@@ -50,7 +49,6 @@ func newTestReconciler(mgr manager.Manager) reconcile.Reconciler {
 		Client: mgr.GetClient(),
 		scheme: mgr.GetScheme(),
 		log:    logging.New(),
-		sess:   session.Must(session.NewSession()),
 		auth:   authorizer.NewFake(mgr.GetClient()),
 	}
 }
@@ -122,5 +120,5 @@ func TestReconcile(t *testing.T) {
 
 	g.Expect(c.Delete(context.TODO(), instance)).Should(gomega.Succeed())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-	g.Eventually(func() error { return c.Get(context.TODO(), cmKey, rCm) }).Should(gomega.HaveOccurred())
+	g.Eventually(func() error { return c.Get(context.TODO(), rcmKey, rCm) }).Should(gomega.HaveOccurred())
 }
