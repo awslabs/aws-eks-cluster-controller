@@ -127,7 +127,7 @@ func (r *ReconcileConfigMap) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, err
 	}
 
-	remoteKey := types.NamespacedName{Namespace: instance.Spec.NameSpace, Name: instance.Spec.Name}
+	remoteKey := types.NamespacedName{Namespace: instance.Spec.Namespace, Name: instance.Spec.Name}
 
 	cluster := &clusterv1alpha1.EKS{}
 	clusterKey := types.NamespacedName{Name: instance.Spec.Cluster, Namespace: instance.Namespace}
@@ -174,7 +174,7 @@ func (r *ReconcileConfigMap) Reconcile(request reconcile.Request) (reconcile.Res
 	rConfigMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        instance.Spec.Name,
-			Namespace:   instance.Spec.NameSpace,
+			Namespace:   instance.Spec.Namespace,
 			Labels:      instance.Labels,
 			Annotations: instance.Annotations,
 		},

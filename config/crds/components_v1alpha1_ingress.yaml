@@ -28,7 +28,7 @@ spec:
               type: string
             name:
               type: string
-            nameSpace:
+            namespace:
               type: string
             rules:
               items:
@@ -41,7 +41,7 @@ spec:
           required:
           - cluster
           - name
-          - nameSpace
+          - namespace
           type: object
         status:
           properties:

@@ -30,12 +30,12 @@ spec:
               type: object
             name:
               type: string
-            nameSpace:
+            namespace:
               type: string
           required:
           - cluster
           - name
-          - nameSpace
+          - namespace
           type: object
         status:
           properties:

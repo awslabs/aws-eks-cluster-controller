@@ -252,7 +252,7 @@ func (r *ReconcileEKS) createConfigMap(instance *clusterv1alpha1.EKS) error {
 			},
 			Spec: componentsv1alpha1.ConfigMapSpec{
 				Name:      "aws-auth",
-				NameSpace: "kube-system",
+				Namespace: "kube-system",
 				Cluster:   instance.Name,
 				Data: map[string]string{
 					"mapRoles": instance.GetAWSAuthData(),

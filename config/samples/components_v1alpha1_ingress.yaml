@@ -8,7 +8,7 @@ metadata:
   name: ingress-sample
 spec:
   name: remote-ingress-sample
-  nameSpace: default    # remote k8s cluster namespace
+  namespace: default    # remote k8s cluster namespace
   cluster: eks-sample
   rules:
   - http:
