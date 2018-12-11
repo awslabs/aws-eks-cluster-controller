@@ -1,0 +1,18 @@
+apiVersion: components.eks.amazonaws.com/v1alpha1
+kind: Service
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: service-sample
+spec:
+  name: remote-service-sample
+  namespace: default
+  cluster: eks-sample
+  ports:
+    - name: "http"
+      port: 80
+      protocol: TCP
+      targetPort: 80
+  selector:
+    app: nginx-deployment
+  type: LoadBalancer
