@@ -2,10 +2,11 @@ package cfnhelper
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"reflect"
 	"testing"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/cloudformation"
 )
 
 func TestCreateAndDescribeStack(t *testing.T) {
@@ -23,7 +24,7 @@ func TestCreateAndDescribeStack(t *testing.T) {
 		{
 			name: "create stack successful",
 			args: args{
-				cfnSvc: &MockCloudformationAPI{},
+				cfnSvc: &MockCloudformationAPI{Status: "bar"},
 				input: &cloudformation.CreateStackInput{
 					StackName:    aws.String("foo"),
 					TemplateBody: aws.String("anybody"),
@@ -38,7 +39,7 @@ func TestCreateAndDescribeStack(t *testing.T) {
 		{
 			name: "create stack error",
 			args: args{
-				cfnSvc: &MockCloudformationAPI{throwCreateStackErr: true},
+				cfnSvc: &MockCloudformationAPI{FailCreate: true, Err: fmt.Errorf("foo")},
 				input: &cloudformation.CreateStackInput{
 					StackName:    aws.String("foo"),
 					TemplateBody: aws.String("anybody"),
@@ -48,28 +49,16 @@ func TestCreateAndDescribeStack(t *testing.T) {
 			err:  fmt.Errorf("unable to create stack foo: foo"),
 		},
 		{
-			name: "create stack wait error",
-			args: args{
-				cfnSvc: &MockCloudformationAPI{throwWaitErr: true},
-				input: &cloudformation.CreateStackInput{
-					StackName:    aws.String("foo"),
-					TemplateBody: aws.String("anybody"),
-				},
-			},
-			want: nil,
-			err:  fmt.Errorf("error waiting for stack to complete foo: foo"),
-		},
-		{
 			name: "create stack describe stack error",
 			args: args{
-				cfnSvc: &MockCloudformationAPI{throwDescribeStacksErr: true},
+				cfnSvc: &MockCloudformationAPI{FailDescribe: true, Err: fmt.Errorf("foo")},
 				input: &cloudformation.CreateStackInput{
 					StackName:    aws.String("foo"),
 					TemplateBody: aws.String("anybody"),
 				},
 			},
 			want: nil,
-			err:  fmt.Errorf("error describing stack foo: foo"),
+			err:  fmt.Errorf("foo"),
 		},
 	}
 	for _, tc := range tests {
@@ -107,18 +96,10 @@ func TestDeleteStack(t *testing.T) {
 		{
 			name: "delete stack error",
 			args: args{
-				cfnSvc:    &MockCloudformationAPI{throwDeleteStackErr: true},
+				cfnSvc:    &MockCloudformationAPI{FailDelete: true, Err: fmt.Errorf("foo")},
 				stackName: "somename",
 			},
 			err: fmt.Errorf("error deleting stack somename: foo"),
-		},
-		{
-			name: "delete stack wait error",
-			args: args{
-				cfnSvc:    &MockCloudformationAPI{throwWaitErr: true},
-				stackName: "somename",
-			},
-			err: fmt.Errorf("error watiting for stack to delete somename: foo"),
 		},
 	}
 	for _, tc := range tests {

@@ -179,7 +179,7 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 	case ControlPlaneUpdating:
 		logger.Info("create Control Plane not complete")
 		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
-	case controlplane.StatusError, controlplane.StatusCreateFailed:
+	case controlplane.StatusError, controlplane.StatusFailed:
 		instance.Status.Status = cpStatus
 		err = r.Update(context.TODO(), instance)
 		if err != nil {
