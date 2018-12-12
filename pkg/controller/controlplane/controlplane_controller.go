@@ -162,25 +162,15 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 			stack, err := cfnhelper.DescribeStack(cfnSvc, stackName)
 			if err != nil && cfnhelper.IsDoesNotExist(err, stackName) {
 				instance.SetFinalizers(finalizers.RemoveFinalizer(instance, FinalizerCFNStack))
-				err = r.Update(context.TODO(), instance)
-				if err != nil {
-					return reconcile.Result{}, err
-				}
-				return reconcile.Result{}, nil
+				return reconcile.Result{}, r.Update(context.TODO(), instance)
 			}
 			if err != nil {
-				logger.Error("error deleting controlplane cloudformation stack", zap.Error(err))
-				instance.Status.Status = StatusFailed
-				r.Update(context.TODO(), instance)
+				r.fail(instance, "error deleting controlplane cloudformation stack", err, logger)
 				return reconcile.Result{}, err
 			}
 			if *stack.StackStatus == cloudformation.StackStatusDeleteComplete {
 				instance.SetFinalizers(finalizers.RemoveFinalizer(instance, FinalizerCFNStack))
-				err = r.Update(context.TODO(), instance)
-				if err != nil {
-					return reconcile.Result{}, err
-				}
-				return reconcile.Result{}, nil
+				return reconcile.Result{}, r.Update(context.TODO(), instance)
 			}
 
 			if *stack.StackStatus == cloudformation.StackStatusDeleteInProgress {
@@ -191,9 +181,7 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 				StackName: aws.String(stackName),
 			})
 			if err != nil {
-				logger.Error("error deleting controlplane cloudformation stack", zap.Error(err))
-				instance.Status.Status = StatusFailed
-				r.Update(context.TODO(), instance)
+				r.fail(instance, "error deleting controlplane cloudformation stack", err, logger)
 				return reconcile.Result{}, err
 			}
 			return reconcile.Result{Requeue: true}, nil
@@ -207,12 +195,7 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 
 		err = r.createControlPlaneStack(cfnSvc, stackName, instance.Spec.ClusterName)
 		if err != nil {
-			logger.Error("error creating controlplane cloudformation stack", zap.Error(err))
-			instance.Status.Status = StatusFailed
-			err = r.Update(context.TODO(), instance)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
+			r.fail(instance, "error creating controlplane cloudformation stack", err, logger)
 			return reconcile.Result{}, err
 		}
 
@@ -225,31 +208,18 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		}
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
-		logger.Error("error describing stack", zap.Error(err))
+		r.fail(instance, "error describing stack", err, logger)
 		return reconcile.Result{}, err
 	}
+
 	logger = logger.With(zap.String("stackName", stackName))
 	logger.Info("Found Stack", zap.String("StackStatus", *stack.StackStatus))
 
-	if *stack.StackStatus == cloudformation.StackStatusCreateFailed {
-		instance.Status.Status = StatusFailed
-		instance.Finalizers = []string{}
-		err = r.Update(context.TODO(), instance)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
-		return reconcile.Result{}, nil
-	}
-	if *stack.StackStatus == cloudformation.StackStatusRollbackFailed ||
+	if *stack.StackStatus == cloudformation.StackStatusCreateFailed ||
+		*stack.StackStatus == cloudformation.StackStatusRollbackFailed ||
 		*stack.StackStatus == cloudformation.StackStatusUpdateRollbackFailed {
 		instance.Status.Status = StatusFailed
-		err = r.Update(context.TODO(), instance)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
-		return reconcile.Result{}, nil
+		return reconcile.Result{}, r.Update(context.TODO(), instance)
 	}
 
 	// The Control Plane doesn't have any configurable bits.  Updates would go here if any are added.
@@ -262,14 +232,16 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		logger.Info("Stack not Complete requeueing")
 		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
 	}
-	logger.Info("Stake Creation Complete")
-	instance.Status.Status = StatusCreateComplete
-	err = r.Update(context.TODO(), instance)
-	if err != nil {
-		return reconcile.Result{}, err
-	}
 
-	return reconcile.Result{}, nil
+	logger.Info("Stack Creation Complete")
+	instance.Status.Status = StatusCreateComplete
+	return reconcile.Result{}, r.Update(context.TODO(), instance)
+}
+
+func (r *ReconcileControlPlane) fail(instance *clusterv1alpha1.ControlPlane, msg string, err error, logger *zap.Logger) {
+	logger.Error(msg, zap.Error(err))
+	instance.Status.Status = StatusFailed
+	r.Update(context.TODO(), instance)
 }
 
 func (r *ReconcileControlPlane) createControlPlaneStack(cfnSvc cloudformationiface.CloudFormationAPI, stackName, clusterName string) error {
