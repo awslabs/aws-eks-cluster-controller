@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/aws/aws-sdk-go/service/cloudformation/cloudformationiface"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -32,6 +33,7 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 		scheme: mgr.GetScheme(),
 		log:    logging.New(),
 		sess:   session.Must(session.NewSession()),
+		cfnSvc: nil,
 	}
 }
 
@@ -41,6 +43,7 @@ type ReconcileNodeGroup struct {
 	scheme *runtime.Scheme
 	log    *zap.Logger
 	sess   *session.Session
+	cfnSvc cloudformationiface.CloudFormationAPI
 }
 
 // Add creates a new NodeGroup Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
@@ -129,12 +132,17 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, r.setNodeGroupError(instance, "EKS cluster not found", err, logger)
 	}
 
-	targetAccountSession, err := eksCluster.Spec.GetCrossAccountSession(r.sess)
-	if err != nil {
-		return reconcile.Result{}, r.setNodeGroupError(instance, "Error getting the cross account session", err, logger)
-	}
+	var cfnSvc cloudformationiface.CloudFormationAPI
+	if r.cfnSvc == nil {
+		targetAccountSession, err := eksCluster.Spec.GetCrossAccountSession(r.sess)
+		if err != nil {
+			return reconcile.Result{}, r.setNodeGroupError(instance, "Error getting the cross account session", err, logger)
+		}
 
-	cfnSvc := cloudformation.New(targetAccountSession)
+		cfnSvc = cloudformation.New(targetAccountSession)
+	} else {
+		cfnSvc = r.cfnSvc
+	}
 
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		if finalizers.HasFinalizer(instance, FinalizerCFNStack) {
@@ -159,10 +167,11 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 	}
 
 	if instance.Status.Status == StatusCreateComplete || instance.Status.Status == StatusCreateFailed {
+		// TODO : Need to implement Update Scenario
 		return reconcile.Result{}, nil
 	}
 
-	logger.Info(fmt.Sprintf("Creating eks-%s Node Group stack for %v account in %v", instance.Spec.Name, eksCluster.Spec.AccountID, eksCluster.Spec.Region))
+	logger.Info(fmt.Sprintf("Creating %s Node Group stack for %v account in %v", getCFNStackName(instance), eksCluster.Spec.AccountID, eksCluster.Spec.Region))
 
 	if err = r.createNodeGroupStack(cfnSvc, instance, eksCluster); err != nil {
 		r.setNodeGroupStatus(StatusCreateFailed, instance)
@@ -176,7 +185,7 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 	return reconcile.Result{}, r.setNodeGroupStatus(StatusCreateComplete, instance)
 }
 
-func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc *cloudformation.CloudFormation, nodegroup *clusterv1alpha1.NodeGroup, eks *clusterv1alpha1.EKS) error {
+func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup, eks *clusterv1alpha1.EKS) error {
 	var eksOptimizedAMIs = map[string]string{
 		"us-east-1": "ami-0440e4f6b9713faf6",
 		"us-west-2": "ami-0a54c984b9f908c81",
@@ -216,7 +225,7 @@ func (r *ReconcileNodeGroup) setNodeGroupStatus(msg string, instance *clusterv1a
 func (r *ReconcileNodeGroup) setNodeGroupError(instance *clusterv1alpha1.NodeGroup, errMsg string, err error, logger *zap.Logger) error {
 	logger.Error(errMsg, zap.Error(err))
 	if setStatusError := r.setNodeGroupStatus(StatusError, instance); setStatusError != nil {
-		r.log.Error("Error setting the status", zap.Error(setStatusError))
+		logger.Error("Error setting the status", zap.Error(setStatusError))
 		return setStatusError
 	}
 	return err

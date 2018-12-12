@@ -16,6 +16,10 @@ type MockCloudformationAPI struct {
 	throwDeleteStackErr    bool
 }
 
+func (m *MockCloudformationAPI) SetCreateStackErr(flag bool) {
+	m.throwCreateStackErr = flag
+}
+
 func (m *MockCloudformationAPI) CreateStack(input *cloudformation.CreateStackInput) (*cloudformation.CreateStackOutput, error) {
 	if m.throwCreateStackErr {
 		return nil, errors.New("foo")
