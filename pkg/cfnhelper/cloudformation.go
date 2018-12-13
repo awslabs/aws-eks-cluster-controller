@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/cloudformation/cloudformationiface"
 	"text/template"
@@ -23,12 +24,23 @@ func CreateAndDescribeStack(cfnSvc cloudformationiface.CloudFormationAPI, input 
 	return DescribeStack(cfnSvc, *input.StackName)
 }
 
+func IsDoesNotExist(err error, stackName string) bool {
+	if err != nil {
+		if aErr, ok := err.(awserr.Error); ok {
+			if aErr.Code() == "ValidationError" && aErr.Message() == fmt.Sprintf("Stack with id %s does not exist", stackName) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func DescribeStack(cfnSvc cloudformationiface.CloudFormationAPI, stackName string) (*cloudformation.Stack, error) {
 	out, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error describing stack %s: %v", stackName, err)
+		return nil, err
 	}
 
 	return out.Stacks[0], nil

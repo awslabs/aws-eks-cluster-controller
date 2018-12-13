@@ -171,21 +171,27 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, nil
 	}
 
-	logger.Info(fmt.Sprintf("Creating %s Node Group stack for %v account in %v", getCFNStackName(instance), eksCluster.Spec.AccountID, eksCluster.Spec.Region))
+	_, err := cfnhelper.DescribeStack(cfnSvc, getCFNStackName(instance))
+	if err != nil && cfnhelper.IsDoesNotExist(err, getCFNStackName(instance)) {
+		logger.Info(fmt.Sprintf("Creating %s Node Group stack for %v account in %v", getCFNStackName(instance), eksCluster.Spec.AccountID, eksCluster.Spec.Region))
 
-	if err = r.createNodeGroupStack(cfnSvc, instance, eksCluster); err != nil {
-		r.setNodeGroupStatus(StatusCreateFailed, instance)
-		logger.Error("Error creating the nodegroup stack", zap.Error(err))
-		return reconcile.Result{}, err
+		if err = r.createNodeGroupStack(cfnSvc, instance, eksCluster); err != nil {
+			r.setNodeGroupStatus(StatusCreateFailed, instance)
+			logger.Error("Error creating the nodegroup stack", zap.Error(err))
+			return reconcile.Result{}, err
+		}
+
+		logger.Info(fmt.Sprintf("Cloudformation stack created successfully %s", getCFNStackName(instance)))
+
+		instance.SetFinalizers(finalizers.AddFinalizer(instance, FinalizerCFNStack))
+		return reconcile.Result{}, r.setNodeGroupStatus(StatusCreateComplete, instance)
 	}
 
-	logger.Info(fmt.Sprintf("Cloudformation stack created successfully %s", getCFNStackName(instance)))
-
-	instance.SetFinalizers(finalizers.AddFinalizer(instance, FinalizerCFNStack))
-	return reconcile.Result{}, r.setNodeGroupStatus(StatusCreateComplete, instance)
+	return reconcile.Result{}, nil
 }
 
 func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup, eks *clusterv1alpha1.EKS) error {
+
 	var eksOptimizedAMIs = map[string]string{
 		"us-east-1": "ami-0440e4f6b9713faf6",
 		"us-west-2": "ami-0a54c984b9f908c81",
@@ -196,6 +202,7 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.Clo
 		"ClusterName":           eks.Spec.ControlPlane.ClusterName,
 		"ControlPlaneStackName": "eks-" + eks.Spec.ControlPlane.ClusterName,
 		"AMI":                   eksOptimizedAMIs[eks.Spec.Region],
+		"NodeInstanceRoleName":  nodegroup.Name,
 	})
 
 	if err != nil {
@@ -205,7 +212,7 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.Clo
 	_, err = cfnhelper.CreateAndDescribeStack(cfnSvc, &cloudformation.CreateStackInput{
 		TemplateBody: aws.String(templateBody),
 		StackName:    aws.String(getCFNStackName(nodegroup)),
-		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
+		Capabilities: []*string{aws.String("CAPABILITY_NAMED_IAM")},
 		Tags: []*cloudformation.Tag{
 			{
 				Key:   aws.String("ClusterName"),
