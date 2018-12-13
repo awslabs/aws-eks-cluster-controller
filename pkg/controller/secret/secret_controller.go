@@ -146,7 +146,7 @@ func (r *ReconcileSecret) Reconcile(request reconcile.Request) (reconcile.Result
 
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		if finalizers.HasFinalizer(instance, SecretFinalizer) {
-			log.Info("deleting ingress")
+			log.Info("deleting secret")
 			instance.Finalizers = finalizers.RemoveFinalizer(instance, SecretFinalizer)
 			if err := r.Client.Update(context.TODO(), instance); err != nil {
 				return reconcile.Result{}, err
@@ -154,14 +154,14 @@ func (r *ReconcileSecret) Reconcile(request reconcile.Request) (reconcile.Result
 
 			found := &corev1.Secret{}
 			if err := client.Get(context.TODO(), remoteKey, found); err != nil {
-				log.Error("could not get remote ingress", zap.Error(err))
+				log.Error("could not get remote secret", zap.Error(err))
 				return reconcile.Result{}, nil
 			}
 			if err := client.Delete(context.TODO(), found); err != nil {
-				log.Error("could not delete remote ingress", zap.Error(err))
+				log.Error("could not delete remote secret", zap.Error(err))
 				return reconcile.Result{}, nil
 			}
-			log.Info("ingress deleted")
+			log.Info("secret deleted")
 			return reconcile.Result{}, nil
 
 		}
