@@ -1,12 +1,13 @@
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+TESTFLAGS ?= ""
 
 all: test manager
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./pkg/... ./cmd/... -coverprofile cover.out
+	go test ${TESTFLAGS} ./pkg/... ./cmd/... -coverprofile cover.out
 
 # Build manager binary
 manager: generate fmt vet
