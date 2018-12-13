@@ -171,7 +171,7 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, nil
 	}
 
-	_, err := cfnhelper.DescribeStack(cfnSvc, getCFNStackName(instance))
+	_, err = cfnhelper.DescribeStack(cfnSvc, getCFNStackName(instance))
 	if err != nil && cfnhelper.IsDoesNotExist(err, getCFNStackName(instance)) {
 		logger.Info(fmt.Sprintf("Creating %s Node Group stack for %v account in %v", getCFNStackName(instance), eksCluster.Spec.AccountID, eksCluster.Spec.Region))
 
