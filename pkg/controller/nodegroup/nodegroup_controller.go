@@ -161,8 +161,8 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 			if err != nil {
 				return reconcile.Result{}, err
 			}
+			return reconcile.Result{}, nil
 		}
-
 		return reconcile.Result{Requeue: true}, nil
 	}
 
