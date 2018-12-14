@@ -1,6 +1,7 @@
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+IAMROLEARN ?= "ROLEARN"
 
 all: test manager
 
@@ -45,7 +46,7 @@ generate:
 docker-build: test
 	docker build . -t ${IMG}
 	@echo "updating kustomize image patch file for manager resource"
-	sed -i '' -e 's@image: .*@image: '"${IMG}"'@' ./config/default/manager_image_patch.yaml
+	sed -i '' -e 's@image: .*@image: '"${IMG}"'@' -e 's@ROLEARN@'"${IAMROLEARN}"'@' ./config/default/manager_image_patch.yaml
 
 # Push the docker image
 docker-push:
