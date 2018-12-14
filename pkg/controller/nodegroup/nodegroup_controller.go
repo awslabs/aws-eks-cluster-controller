@@ -212,7 +212,7 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.Clo
 	_, err = cfnhelper.CreateAndDescribeStack(cfnSvc, &cloudformation.CreateStackInput{
 		TemplateBody: aws.String(templateBody),
 		StackName:    aws.String(getCFNStackName(nodegroup)),
-		Capabilities: []*string{aws.String("CAPABILITY_NAMED_IAM")},
+		Capabilities: []*string{aws.String("CAPABILITY_NAMED_IAM"), aws.String("CAPABILITY_IAM")},
 		Tags: []*cloudformation.Tag{
 			{
 				Key:   aws.String("ClusterName"),

@@ -1,9 +1,9 @@
 package nodegroup
 
 import (
+	"fmt"
 	"testing"
 	"time"
-	"fmt"
 
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/cfnhelper"
@@ -61,11 +61,11 @@ func TestNodeGroupReconcile(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 
 	type testCase struct {
-		instance        *clusterv1alpha1.NodeGroup
-		expectedStatus  string
-		logMessage      string
-		testKey			string
-		cfnSvc			*cfnhelper.MockCloudformationAPI
+		instance       *clusterv1alpha1.NodeGroup
+		expectedStatus string
+		logMessage     string
+		testKey        string
+		cfnSvc         *cfnhelper.MockCloudformationAPI
 	}
 
 	var testCases = []*testCase{}
@@ -89,9 +89,9 @@ func TestNodeGroupReconcile(t *testing.T) {
 		mgr, err := manager.New(cfg, manager.Options{})
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		c = mgr.GetClient()
-		
+
 		cfnSvc := test.cfnSvc
-		
+
 		recFn, requests := SetupTestReconcile(newTestReconciler(mgr, cfnSvc))
 		g.Expect(add(mgr, recFn)).NotTo(gomega.HaveOccurred())
 
@@ -117,7 +117,7 @@ func TestNodeGroupReconcile(t *testing.T) {
 			err := c.Get(context.TODO(), getNGKey(test.testKey), nodegroup)
 			return nodegroup.Status.Status, err
 		}, timeout).Should(gomega.Equal(test.expectedStatus))
-		
+
 		t.Logf("Test Completed - %s", test.logMessage)
 	}
 }
