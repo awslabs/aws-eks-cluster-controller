@@ -30,6 +30,7 @@ type ComponentsV1alpha1Interface interface {
 	ConfigMapsGetter
 	DeploymentsGetter
 	IngressesGetter
+	SecretsGetter
 	ServicesGetter
 }
 
@@ -48,6 +49,10 @@ func (c *ComponentsV1alpha1Client) Deployments(namespace string) DeploymentInter
 
 func (c *ComponentsV1alpha1Client) Ingresses(namespace string) IngressInterface {
 	return newIngresses(c, namespace)
+}
+
+func (c *ComponentsV1alpha1Client) Secrets(namespace string) SecretInterface {
+	return newSecrets(c, namespace)
 }
 
 func (c *ComponentsV1alpha1Client) Services(namespace string) ServiceInterface {
