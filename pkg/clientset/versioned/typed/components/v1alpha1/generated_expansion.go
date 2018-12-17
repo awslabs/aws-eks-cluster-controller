@@ -23,3 +23,7 @@ type ConfigMapExpansion interface{}
 type DeploymentExpansion interface{}
 
 type IngressExpansion interface{}
+
+type SecretExpansion interface{}
+
+type ServiceExpansion interface{}

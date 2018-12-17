@@ -14,16 +14,17 @@
 // limitations under the License.
 //
 
-package configmap
+package secret
 
 import (
 	"testing"
 	"time"
 
-	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
-	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/authorizer"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
+
+	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
+	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
 	"github.com/onsi/gomega"
 	"golang.org/x/net/context"
 	corev1 "k8s.io/api/core/v1"
@@ -37,15 +38,14 @@ import (
 
 var c client.Client
 
-var expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: "foo-cm", Namespace: "default"}}
-var cmKey = types.NamespacedName{Name: "foo-cm", Namespace: "default"}
-var rcmKey = types.NamespacedName{Name: "remote-foo-cm", Namespace: "default"}
+var expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: "foo-secret", Namespace: "default"}}
+var secretKey = types.NamespacedName{Name: "foo-secret", Namespace: "default"}
+var rSecretKey = types.NamespacedName{Name: "remote-foo-secret", Namespace: "default"}
 
-const timeout = time.Second * 10
+const timeout = time.Second * 5
 
-// This is for testing.  It will return a reconciler that will use the Client for both local and remote calls.
 func newTestReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileConfigMap{
+	return &ReconcileSecret{
 		Client: mgr.GetClient(),
 		scheme: mgr.GetScheme(),
 		log:    logging.New(),
@@ -67,13 +67,13 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 
-	instance := &componentsv1alpha1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Name: "foo-cm", Namespace: "default"},
-		Spec: componentsv1alpha1.ConfigMapSpec{
-			Name:      "remote-foo-cm",
-			Namespace: "default",
-			Cluster:   "foo-eks",
-			Data:      map[string]string{"key": "value"},
+	instance := &componentsv1alpha1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "foo-secret", Namespace: "default"},
+		Spec: componentsv1alpha1.SecretSpec{
+			Name:       "remote-foo-secret",
+			Namespace:  "default",
+			Cluster:    "foo-eks",
+			StringData: map[string]string{"key": "value"},
 		},
 	}
 
@@ -96,7 +96,7 @@ func TestReconcile(t *testing.T) {
 	g.Expect(c.Create(context.TODO(), cluster)).NotTo(gomega.HaveOccurred())
 	defer c.Delete(context.TODO(), cluster)
 
-	// Create the ConfigMap object and expect the Reconcile and Deployment to be created
+	// Create the Secret object and expect the Reconcile and Deployment to be created
 	err = c.Create(context.TODO(), instance)
 	// The instance object may not be a valid object because it might be missing some required fields.
 	// Please modify the instance object by adding required fields and then remove the following if statement.
@@ -108,17 +108,16 @@ func TestReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 
-	rCm := &corev1.ConfigMap{}
-	err = c.Get(context.TODO(), rcmKey, rCm)
+	rSecret := &corev1.Secret{}
+	err = c.Get(context.TODO(), rSecretKey, rSecret)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
-	cm := &componentsv1alpha1.ConfigMap{}
+	secret := &componentsv1alpha1.Secret{}
 	g.Eventually(func() (string, error) {
-		err := c.Get(context.TODO(), cmKey, cm)
-		return cm.Status.Status, err
+		err := c.Get(context.TODO(), secretKey, secret)
+		return secret.Status.Status, err
 	}, timeout).Should(gomega.Equal("Created"))
-
 	g.Expect(c.Delete(context.TODO(), instance)).Should(gomega.Succeed())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-	g.Eventually(func() error { return c.Get(context.TODO(), rcmKey, rCm) }).Should(gomega.HaveOccurred())
+	g.Eventually(func() error { return c.Get(context.TODO(), rSecretKey, rSecret) }).Should(gomega.HaveOccurred())
 }

@@ -16,11 +16,17 @@ type MockCloudformationAPI struct {
 	FailCreate   bool
 	FailDescribe bool
 	FailDelete   bool
+
+	ResetDescribe bool
 }
 
 func (m *MockCloudformationAPI) CreateStack(input *cloudformation.CreateStackInput) (*cloudformation.CreateStackOutput, error) {
 	if m.FailCreate {
 		return nil, m.Err
+	}
+
+	if m.ResetDescribe {
+		m.FailDescribe = false
 	}
 
 	return &cloudformation.CreateStackOutput{

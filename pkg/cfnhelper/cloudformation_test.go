@@ -60,6 +60,21 @@ func TestCreateAndDescribeStack(t *testing.T) {
 			want: nil,
 			err:  fmt.Errorf("foo"),
 		},
+		{
+			name: "ResetDescribe Makes DescribeStacks return true in create.",
+			args: args{
+				cfnSvc: &MockCloudformationAPI{FailDescribe: true, ResetDescribe: true, Status: "bar"},
+				input: &cloudformation.CreateStackInput{
+					StackName:    aws.String("foo"),
+					TemplateBody: aws.String("anybody"),
+				},
+			},
+			want: &cloudformation.Stack{
+				StackName:   aws.String("foo"),
+				StackStatus: aws.String("bar"),
+			},
+			err: nil,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

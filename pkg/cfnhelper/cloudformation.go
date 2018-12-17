@@ -1,7 +1,10 @@
 package cfnhelper
 
 import (
+	"bytes"
 	"fmt"
+
+	"text/template"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -30,7 +33,6 @@ func IsDoesNotExist(err error, stackName string) bool {
 				return true
 			}
 		}
-
 	}
 	return false
 }
@@ -62,4 +64,16 @@ func DeleteStack(cfnSvc cloudformationiface.CloudFormationAPI, stackName string)
 	}
 
 	return nil
+}
+
+func GetCFNTemplateBody(cfnTemplate string, args map[string]string) (string, error) {
+	templatizedCFN, err := template.New("cfntemplate").Parse(cfnTemplate)
+	if err != nil {
+		return "", err
+	}
+	b := bytes.NewBuffer([]byte{})
+	if err := templatizedCFN.Execute(b, args); err != nil {
+		return "", err
+	}
+	return b.String(), nil
 }

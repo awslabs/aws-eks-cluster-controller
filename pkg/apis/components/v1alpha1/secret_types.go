@@ -17,29 +17,33 @@
 package v1alpha1
 
 import (
-	extv1beta "k8s.io/api/extensions/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// IngressSpec defines the desired state of Ingress
-type IngressSpec struct {
+// SecretSpec defines the desired state of Secret
+type SecretSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	extv1beta.IngressSpec `json:",inline"`
+	// +optional
+	Data map[string][]byte `json:"data,omitempty"`
+	// +optional
+	StringData map[string]string `json:"stringData,omitempty"`
+	// +optional
+	Type corev1.SecretType `json:"type,omitempty"`
 
 	Cluster   string `json:"cluster"`
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
 }
 
-// IngressStatus defines the observed state of Ingress
-type IngressStatus struct {
+// SecretStatus defines the observed state of Secret
+type SecretStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	extv1beta.IngressStatus `json:",inline"`
 
 	Status string `json:"status,omitempty"`
 }
@@ -47,25 +51,25 @@ type IngressStatus struct {
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Ingress is the Schema for the ingresses API
+// Secret is the Schema for the secrets API
 // +k8s:openapi-gen=true
-type Ingress struct {
+type Secret struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   IngressSpec   `json:"spec,omitempty"`
-	Status IngressStatus `json:"status,omitempty"`
+	Spec   SecretSpec   `json:"spec,omitempty"`
+	Status SecretStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// IngressList contains a list of Ingress
-type IngressList struct {
+// SecretList contains a list of Secret
+type SecretList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Ingress `json:"items"`
+	Items           []Secret `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Ingress{}, &IngressList{})
+	SchemeBuilder.Register(&Secret{}, &SecretList{})
 }

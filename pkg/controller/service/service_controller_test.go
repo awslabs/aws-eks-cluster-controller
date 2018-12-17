@@ -14,9 +14,10 @@
 // limitations under the License.
 //
 
-package configmap
+package service
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -37,15 +38,15 @@ import (
 
 var c client.Client
 
-var expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: "foo-cm", Namespace: "default"}}
-var cmKey = types.NamespacedName{Name: "foo-cm", Namespace: "default"}
-var rcmKey = types.NamespacedName{Name: "remote-foo-cm", Namespace: "default"}
+var expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: "foo-svc", Namespace: "default"}}
+var svcKey = types.NamespacedName{Name: "foo-svc", Namespace: "default"}
+var rsvcKey = types.NamespacedName{Name: "remote-foo-svc", Namespace: "default"}
 
 const timeout = time.Second * 10
 
 // This is for testing.  It will return a reconciler that will use the Client for both local and remote calls.
 func newTestReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileConfigMap{
+	return &ReconcileService{
 		Client: mgr.GetClient(),
 		scheme: mgr.GetScheme(),
 		log:    logging.New(),
@@ -66,14 +67,37 @@ func TestReconcile(t *testing.T) {
 			Region:               "us-test-1",
 		},
 	}
+	var svcSpec corev1.ServiceSpec
+	b := []byte(`
+{
+  "ports": [
+    {
+      "name": "http",
+      "port": 80,
+      "protocol": "TCP",
+      "targetPort": 80
+    }
+  ],
+  "selector": {
+    "app": "foo-deploy"
+  },
+  "type": "LoadBalancer"
+}
+`)
+	err := json.Unmarshal(b, &svcSpec)
+	if err != nil {
+		t.Logf("failed to umarshal: %v", err)
+		t.Fail()
+		return
+	}
 
-	instance := &componentsv1alpha1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Name: "foo-cm", Namespace: "default"},
-		Spec: componentsv1alpha1.ConfigMapSpec{
-			Name:      "remote-foo-cm",
-			Namespace: "default",
-			Cluster:   "foo-eks",
-			Data:      map[string]string{"key": "value"},
+	instance := &componentsv1alpha1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "foo-svc", Namespace: "default"},
+		Spec: componentsv1alpha1.ServiceSpec{
+			Name:        "remote-foo-svc",
+			Namespace:   "default",
+			Cluster:     "foo-eks",
+			ServiceSpec: svcSpec,
 		},
 	}
 
@@ -96,7 +120,7 @@ func TestReconcile(t *testing.T) {
 	g.Expect(c.Create(context.TODO(), cluster)).NotTo(gomega.HaveOccurred())
 	defer c.Delete(context.TODO(), cluster)
 
-	// Create the ConfigMap object and expect the Reconcile and Deployment to be created
+	// Create the Service object and expect the Reconcile and Deployment to be created
 	err = c.Create(context.TODO(), instance)
 	// The instance object may not be a valid object because it might be missing some required fields.
 	// Please modify the instance object by adding required fields and then remove the following if statement.
@@ -108,17 +132,16 @@ func TestReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 
-	rCm := &corev1.ConfigMap{}
-	err = c.Get(context.TODO(), rcmKey, rCm)
+	rSvc := &corev1.Service{}
+	err = c.Get(context.TODO(), rsvcKey, rSvc)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
-	cm := &componentsv1alpha1.ConfigMap{}
+	svc := &componentsv1alpha1.Service{}
 	g.Eventually(func() (string, error) {
-		err := c.Get(context.TODO(), cmKey, cm)
-		return cm.Status.Status, err
+		err := c.Get(context.TODO(), svcKey, svc)
+		return svc.Status.Status, err
 	}, timeout).Should(gomega.Equal("Created"))
 
 	g.Expect(c.Delete(context.TODO(), instance)).Should(gomega.Succeed())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-	g.Eventually(func() error { return c.Get(context.TODO(), rcmKey, rCm) }).Should(gomega.HaveOccurred())
 }

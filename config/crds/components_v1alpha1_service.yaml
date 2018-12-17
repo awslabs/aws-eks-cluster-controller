@@ -4,12 +4,12 @@ metadata:
   creationTimestamp: null
   labels:
     controller-tools.k8s.io: "1.0"
-  name: ingresses.components.eks.amazonaws.com
+  name: services.components.eks.amazonaws.com
 spec:
   group: components.eks.amazonaws.com
   names:
-    kind: Ingress
-    plural: ingresses
+    kind: Service
+    plural: services
   scope: Namespaced
   validation:
     openAPIV3Schema:
@@ -22,22 +22,45 @@ spec:
           type: object
         spec:
           properties:
-            backend:
-              type: object
             cluster:
               type: string
+            clusterIP:
+              type: string
+            externalIPs:
+              items:
+                type: string
+              type: array
+            externalName:
+              type: string
+            externalTrafficPolicy:
+              type: string
+            healthCheckNodePort:
+              format: int32
+              type: integer
+            loadBalancerIP:
+              type: string
+            loadBalancerSourceRanges:
+              items:
+                type: string
+              type: array
             name:
               type: string
             namespace:
               type: string
-            rules:
+            ports:
               items:
                 type: object
               type: array
-            tls:
-              items:
-                type: object
-              type: array
+            publishNotReadyAddresses:
+              type: boolean
+            selector:
+              type: object
+            sessionAffinity:
+              type: string
+            sessionAffinityConfig:
+              type: object
+            type:
+              type: string
           required:
           - cluster
           - name

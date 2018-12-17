@@ -7,7 +7,7 @@ metadata:
 spec:
   # Add fields here
   name: testconfigmap
-  nameSpace: default
+  namespace: default
   cluster: eks-sample
   data:
     key: |

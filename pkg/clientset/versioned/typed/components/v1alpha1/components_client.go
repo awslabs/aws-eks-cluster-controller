@@ -30,6 +30,8 @@ type ComponentsV1alpha1Interface interface {
 	ConfigMapsGetter
 	DeploymentsGetter
 	IngressesGetter
+	SecretsGetter
+	ServicesGetter
 }
 
 // ComponentsV1alpha1Client is used to interact with features provided by the components.eks.amazonaws.com group.
@@ -47,6 +49,14 @@ func (c *ComponentsV1alpha1Client) Deployments(namespace string) DeploymentInter
 
 func (c *ComponentsV1alpha1Client) Ingresses(namespace string) IngressInterface {
 	return newIngresses(c, namespace)
+}
+
+func (c *ComponentsV1alpha1Client) Secrets(namespace string) SecretInterface {
+	return newSecrets(c, namespace)
+}
+
+func (c *ComponentsV1alpha1Client) Services(namespace string) ServiceInterface {
+	return newServices(c, namespace)
 }
 
 // NewForConfig creates a new ComponentsV1alpha1Client for the given config.

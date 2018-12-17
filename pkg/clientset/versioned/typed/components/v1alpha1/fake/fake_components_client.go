@@ -40,6 +40,14 @@ func (c *FakeComponentsV1alpha1) Ingresses(namespace string) v1alpha1.IngressInt
 	return &FakeIngresses{c, namespace}
 }
 
+func (c *FakeComponentsV1alpha1) Secrets(namespace string) v1alpha1.SecretInterface {
+	return &FakeSecrets{c, namespace}
+}
+
+func (c *FakeComponentsV1alpha1) Services(namespace string) v1alpha1.ServiceInterface {
+	return &FakeServices{c, namespace}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeComponentsV1alpha1) RESTClient() rest.Interface {
