@@ -200,9 +200,9 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.Clo
 
 	templateBody, err := cfnhelper.GetCFNTemplateBody(nodeGroupCFNTemplate, map[string]string{
 		"ClusterName":           eks.Spec.ControlPlane.ClusterName,
-		"ControlPlaneStackName": "eks-" + eks.Spec.ControlPlane.ClusterName,
+		"ControlPlaneStackName": eks.GetControlPlaneStackName(),
 		"AMI":                   eksOptimizedAMIs[eks.Spec.Region],
-		"NodeInstanceRoleName":  nodegroup.Name + "-role",
+		"NodeInstanceRoleName":  fmt.Sprintf("%s-role", nodegroup.Name),
 	})
 
 	if err != nil {
