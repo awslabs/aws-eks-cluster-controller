@@ -116,8 +116,6 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 
 	logger.Info("got reconcile request")
 
-	stackName := fmt.Sprintf("eks-%s", instance.Spec.ClusterName)
-
 	labelsToVerify := []string{"eks.owner.name", "eks.owner.namespace"}
 	for _, label := range labelsToVerify {
 		if _, ok := instance.Labels[label]; !ok {
@@ -136,6 +134,8 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		return reconcile.Result{}, err
 	}
 	logger.Info("found cluster", zap.String("ClusterName", eksCluster.Name))
+
+	stackName := eksCluster.GetControlPlaneStackName()
 
 	var cfnSvc cloudformationiface.CloudFormationAPI
 	if r.cfnSvc == nil {

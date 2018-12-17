@@ -102,3 +102,7 @@ func (e EKS) GetNodegroupNames() []string {
 func getRoleARN(account, name string) string {
 	return fmt.Sprintf("arn:aws:iam::%s:role/%s-role", account, name)
 }
+
+func (e EKS) GetControlPlaneStackName() string {
+	return fmt.Sprintf("eks-%s", e.Spec.ControlPlane.ClusterName)
+}
