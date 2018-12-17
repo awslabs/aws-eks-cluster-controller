@@ -84,8 +84,6 @@ func TestReconcile(t *testing.T) {
 
 	// Create the ControlPlane object and expect the Reconcile and Deployment to be created
 	err = c.Create(context.TODO(), instance)
-	// The instance object may not be a valid object because it might be missing some required fields.
-	// Please modify the instance object by adding required fields and then remove the following if statement.
 	if apierrors.IsInvalid(err) {
 		t.Logf("failed to create object, got an invalid object error: %v", err)
 		return
@@ -109,10 +107,6 @@ func TestReconcile(t *testing.T) {
 	}).Should(gomega.Equal(StatusCreateComplete))
 
 	err = c.Delete(context.TODO(), instance)
-	if apierrors.IsInvalid(err) {
-		t.Logf("failed to delete object, got an invalid object error: %v", err)
-		return
-	}
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 }

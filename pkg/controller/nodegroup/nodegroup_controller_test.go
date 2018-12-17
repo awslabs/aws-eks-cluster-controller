@@ -1,17 +1,17 @@
 package nodegroup
 
 import (
-	"fmt"
+	"context"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/service/cloudformation"
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/cfnhelper"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
-
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/onsi/gomega"
-	"golang.org/x/net/context"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -20,13 +20,6 @@ import (
 )
 
 var c client.Client
-
-func getRequest(name string) reconcile.Request {
-	return reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: "default"}}
-}
-func getNGKey(name string) types.NamespacedName {
-	return types.NamespacedName{Name: name, Namespace: "default"}
-}
 
 func getEKSCluster(name string) *clusterv1alpha1.EKS {
 	return &clusterv1alpha1.EKS{
@@ -45,92 +38,90 @@ func getEKSCluster(name string) *clusterv1alpha1.EKS {
 	}
 }
 
-const timeout = time.Second * 25
+const timeout = time.Second * 5
 
-func newTestReconciler(mgr manager.Manager, cfn *cfnhelper.MockCloudformationAPI) reconcile.Reconciler {
+func newTestReconciler(mgr manager.Manager) *ReconcileNodeGroup {
+	var errDoesNotExist = awserr.New("ValidationError", "Stack with id eks-foopla-nodegroup-ngroup1 does not exist", nil)
 	return &ReconcileNodeGroup{
 		Client: mgr.GetClient(),
 		scheme: mgr.GetScheme(),
 		log:    logging.New(),
 		sess:   nil,
-		cfnSvc: cfn,
+		cfnSvc: &cfnhelper.MockCloudformationAPI{FailDescribe: true, Err: errDoesNotExist},
 	}
 }
+
+var expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: "eks-foopla-nodegroup-ngroup1", Namespace: "default"}}
+var ngKey = types.NamespacedName{Name: "eks-foopla-nodegroup-ngroup1", Namespace: "default"}
 
 func TestNodeGroupReconcile(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 
-	type testCase struct {
-		instance       *clusterv1alpha1.NodeGroup
-		expectedStatus string
-		logMessage     string
-		testKey        string
-		cfnSvc         *cfnhelper.MockCloudformationAPI
-	}
-
-	var testCases = []*testCase{}
-
-	createIsSuccessful := new(testCase)
-	createIsSuccessful.instance = &clusterv1alpha1.NodeGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "foopla", Namespace: "default", Labels: map[string]string{"eks.owner.name": "eks-foopla", "eks.owner.namespace": "default"}},
-		Spec: clusterv1alpha1.NodeGroupSpec{
-			Name: "foopla-ngroup1",
-		},
-	}
-	createIsSuccessful.expectedStatus = StatusCreateComplete
-	createIsSuccessful.logMessage = "Create works correctly"
-	createIsSuccessful.testKey = "foopla"
-	createIsSuccessful.cfnSvc = &cfnhelper.MockCloudformationAPI{FailDescribe: true, ResetDescribe: true, Err: awserr.New("ValidationError", "Stack with id eks-foopla-ngroup1 does not exist", nil)}
-	testCases = append(testCases, createIsSuccessful)
-
-	//TODO Add Remaining TestCases
-
-	for _, test := range testCases {
-		mgr, err := manager.New(cfg, manager.Options{})
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-		c = mgr.GetClient()
-
-		cfnSvc := test.cfnSvc
-
-		recFn, requests := SetupTestReconcile(newTestReconciler(mgr, cfnSvc))
-		g.Expect(add(mgr, recFn)).NotTo(gomega.HaveOccurred())
-
-		stopMgr, mgrStopped := StartTestManager(mgr, g)
-
-		defer func() {
-			close(stopMgr)
-			mgrStopped.Wait()
-		}()
-
-		eksFooCluster := getEKSCluster(fmt.Sprintf("eks-%s", test.testKey))
-
-		g.Expect(c.Create(context.TODO(), eksFooCluster)).NotTo(gomega.HaveOccurred())
-		defer c.Delete(context.TODO(), eksFooCluster)
-
-		err = c.Create(context.TODO(), test.instance)
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-		defer c.Delete(context.TODO(), test.instance)
-		g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(getRequest(test.testKey))))
-
-		g.Eventually(func() (string, error) {
-			nodegroup := &clusterv1alpha1.NodeGroup{}
-			err := c.Get(context.TODO(), getNGKey(test.testKey), nodegroup)
-			return nodegroup.Status.Status, err
-		}, timeout).Should(gomega.Equal(test.expectedStatus))
-
-		t.Logf("Test Completed - %s", test.logMessage)
-	}
-}
-
-func TestNodeGroupGetCFNStackNamereturnsExpectedName(t *testing.T) {
 	instance := &clusterv1alpha1.NodeGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "eks-foopla-nodegroup-ngroup1",
+			Namespace: "default",
+			Labels:    map[string]string{"eks.owner.name": "eks-foopla", "eks.owner.namespace": "default"},
+		},
 		Spec: clusterv1alpha1.NodeGroupSpec{
-			Name: "foo",
+			Name: "ngroup1",
 		},
 	}
-	actual := getCFNStackName(instance)
-	expected := "eks-foo"
-	if actual != expected {
-		t.Errorf("getCFNStackname returned %s for foo", actual)
+
+	mgr, err := manager.New(cfg, manager.Options{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	c = mgr.GetClient()
+
+	reconciler := newTestReconciler(mgr)
+	recFn, requests := SetupTestReconcile(reconciler)
+	g.Expect(add(mgr, recFn)).NotTo(gomega.HaveOccurred())
+
+	stopMgr, mgrStopped := StartTestManager(mgr, g)
+
+	defer func() {
+		close(stopMgr)
+		mgrStopped.Wait()
+	}()
+
+	eksFooCluster := getEKSCluster("eks-foopla")
+
+	g.Expect(c.Create(context.TODO(), eksFooCluster)).NotTo(gomega.HaveOccurred())
+	defer c.Delete(context.TODO(), eksFooCluster)
+
+	err = c.Create(context.TODO(), instance)
+	if apierrors.IsInvalid(err) {
+		t.Logf("failed to create object, got an invalid object error: %v", err)
+		return
 	}
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
+
+	getNG := &clusterv1alpha1.NodeGroup{}
+	g.Eventually(func() (string, error) {
+		err := c.Get(context.TODO(), ngKey, getNG)
+		return getNG.Status.Status, err
+	}).Should(gomega.Equal(StatusCreating))
+
+	reconciler.cfnSvc = &cfnhelper.MockCloudformationAPI{Status: cloudformation.StackStatusCreateInProgress}
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
+
+	getNG = &clusterv1alpha1.NodeGroup{}
+	err = c.Get(context.TODO(), ngKey, getNG)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	g.Expect(getNG.Status.Status).Should(gomega.Equal(StatusCreating))
+
+	reconciler.cfnSvc = &cfnhelper.MockCloudformationAPI{Status: cloudformation.StackStatusCreateComplete}
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
+
+	g.Eventually(func() (string, error) {
+		nodegroup := &clusterv1alpha1.NodeGroup{}
+		err := c.Get(context.TODO(), ngKey, nodegroup)
+		return nodegroup.Status.Status, err
+	}, timeout).Should(gomega.Equal(StatusCreateComplete))
+
+	err = c.Delete(context.TODO(), instance)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
+
 }

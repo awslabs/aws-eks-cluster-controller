@@ -16,8 +16,6 @@ type MockCloudformationAPI struct {
 	FailCreate   bool
 	FailDescribe bool
 	FailDelete   bool
-
-	ResetDescribe bool
 }
 
 func (m *MockCloudformationAPI) CreateStack(input *cloudformation.CreateStackInput) (*cloudformation.CreateStackOutput, error) {
@@ -25,11 +23,14 @@ func (m *MockCloudformationAPI) CreateStack(input *cloudformation.CreateStackInp
 		return nil, m.Err
 	}
 
-	if m.ResetDescribe {
-		m.FailDescribe = false
-	}
-
 	return &cloudformation.CreateStackOutput{
+		StackId: aws.String("foo"),
+	}, nil
+}
+
+func (m *MockCloudformationAPI) UpdateStack(input *cloudformation.UpdateStackInput) (*cloudformation.UpdateStackOutput, error) {
+
+	return &cloudformation.UpdateStackOutput{
 		StackId: aws.String("foo"),
 	}, nil
 }

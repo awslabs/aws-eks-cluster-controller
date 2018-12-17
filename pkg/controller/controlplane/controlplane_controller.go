@@ -1,10 +1,8 @@
 package controlplane
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"text/template"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -155,9 +153,15 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		cfnSvc = r.cfnSvc
 	}
 
+	logger = logger.With(
+		zap.String("AWSAccountID", eksCluster.Spec.AccountID),
+		zap.String("AWSRegion", eksCluster.Spec.Region),
+		zap.String("StackName", stackName),
+	)
+
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		if finalizers.HasFinalizer(instance, FinalizerCFNStack) {
-			logger.Info("deleting control plane cloudformation stack", zap.String("AWSAccountID", eksCluster.Spec.AccountID), zap.String("AWSRegion", eksCluster.Spec.Region), zap.String("StackName", stackName))
+			logger.Info("deleting control plane cloudformation stack")
 
 			stack, err := cfnhelper.DescribeStack(cfnSvc, stackName)
 			if err != nil && cfnhelper.IsDoesNotExist(err, stackName) {
@@ -191,7 +195,7 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 
 	stack, err := cfnhelper.DescribeStack(cfnSvc, stackName)
 	if err != nil && cfnhelper.IsDoesNotExist(err, stackName) {
-		logger.Info("creating EKS control plane cloudformation stack", zap.String("AWSAccountID", eksCluster.Spec.AccountID), zap.String("AWSRegion", eksCluster.Spec.Region), zap.String("StackName", stackName))
+		logger.Info("creating EKS control plane cloudformation stack")
 
 		err = r.createControlPlaneStack(cfnSvc, stackName, instance.Spec.ClusterName)
 		if err != nil {
@@ -212,7 +216,6 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		return reconcile.Result{}, err
 	}
 
-	logger = logger.With(zap.String("stackName", stackName))
 	logger.Info("Found Stack", zap.String("StackStatus", *stack.StackStatus))
 
 	if *stack.StackStatus == cloudformation.StackStatusCreateFailed ||
@@ -245,20 +248,12 @@ func (r *ReconcileControlPlane) fail(instance *clusterv1alpha1.ControlPlane, msg
 }
 
 func (r *ReconcileControlPlane) createControlPlaneStack(cfnSvc cloudformationiface.CloudFormationAPI, stackName, clusterName string) error {
-	controlPlaneTemplate, err := template.New("cfntemplate").Parse(controlplaneCFNTemplate)
-	if err != nil {
-		return err
-	}
-
-	b := bytes.NewBuffer([]byte{})
-	if err := controlPlaneTemplate.Execute(b, map[string]string{
+	body, err := cfnhelper.GetCFNTemplateBody(controlplaneCFNTemplate, map[string]string{
 		"ClusterName": clusterName,
-	}); err != nil {
-		return err
-	}
+	})
 
 	_, err = cfnSvc.CreateStack(&cloudformation.CreateStackInput{
-		TemplateBody: aws.String(b.String()),
+		TemplateBody: aws.String(body),
 		StackName:    aws.String(stackName),
 		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
 		Tags: []*cloudformation.Tag{
