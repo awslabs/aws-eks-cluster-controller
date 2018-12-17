@@ -85,7 +85,7 @@ func (e EKS) GetAWSAuthData() string {
 	auths := []string{}
 	for _, ngName := range e.GetNodegroupNames() {
 
-		auth := fmt.Sprintf(authString, getRoleARN(e.Spec.AccountID, ngName))
+		auth := fmt.Sprintf(authString, e.GetRoleARN(ngName))
 		auths = append(auths, auth)
 	}
 	return strings.Join(auths, "")
@@ -99,6 +99,10 @@ func (e EKS) GetNodegroupNames() []string {
 	return names
 }
 
-func getRoleARN(account, name string) string {
-	return fmt.Sprintf("arn:aws:iam::%s:role/%s-role", account, name)
+func (e EKS) GetRoleARN(name string) string {
+	return fmt.Sprintf("arn:aws:iam::%s:role/%s-role", e.Spec.AccountID, name)
+}
+
+func (e EKS) GetControlPlaneStackName() string {
+	return fmt.Sprintf("eks-%s", e.Spec.ControlPlane.ClusterName)
 }
