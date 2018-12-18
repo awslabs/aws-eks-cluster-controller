@@ -199,7 +199,7 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 	if err != nil && cfnhelper.IsDoesNotExist(err, stackName) {
 		logger.Info("creating nodegroup cloudformation stack")
 
-		err = r.createNodeGroupStack(cfnSvc, instance, eksCluster.Spec.ControlPlane.ClusterName, eksCluster.Spec.Region)
+		err = r.createNodeGroupStack(cfnSvc, instance, eksCluster)
 		if err != nil {
 			r.fail(instance, "error creating nodegroup cloudformation stack", err, logger)
 			return reconcile.Result{}, err
@@ -249,7 +249,7 @@ func (r *ReconcileNodeGroup) fail(instance *clusterv1alpha1.NodeGroup, msg strin
 	r.Update(context.TODO(), instance)
 }
 
-func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup, clusterName, region string) error {
+func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup, eks *clusterv1alpha1.EKS) error {
 
 	// These AMIs are found https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-ami.html
 	var eksOptimizedAMIs = map[string]string{
@@ -266,10 +266,10 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.Clo
 	}
 
 	templateBody, err := cfnhelper.GetCFNTemplateBody(nodeGroupCFNTemplate, map[string]string{
-		"ClusterName":           clusterName,
-		"ControlPlaneStackName": "eks-" + clusterName,
-		"AMI":                   eksOptimizedAMIs["v1.10-"+region],
-		"NodeInstanceName":      nodegroup.Name,
+		"ClusterName":           eks.Spec.ControlPlane.ClusterName,
+		"ControlPlaneStackName": eks.GetControlPlaneStackName(),
+		"AMI":                   eksOptimizedAMIs["v1.10-"+eks.Spec.Region],
+		"NodeInstanceRoleName":  fmt.Sprintf("%s-role", nodegroup.Name),
 	})
 
 	if err != nil {
@@ -283,7 +283,7 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.Clo
 		Tags: []*cloudformation.Tag{
 			{
 				Key:   aws.String("ClusterName"),
-				Value: aws.String(clusterName),
+				Value: aws.String(eks.Spec.ControlPlane.ClusterName),
 			},
 		},
 	})
