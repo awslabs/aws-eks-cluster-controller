@@ -269,7 +269,7 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.Clo
 		"ClusterName":           eks.Spec.ControlPlane.ClusterName,
 		"ControlPlaneStackName": eks.GetControlPlaneStackName(),
 		"AMI":                   eksOptimizedAMIs["v1.10-"+eks.Spec.Region],
-		"NodeInstanceRoleName":  fmt.Sprintf("%s-role", nodegroup.Name),
+		"NodeInstanceName":      nodegroup.Name,
 	})
 
 	if err != nil {
