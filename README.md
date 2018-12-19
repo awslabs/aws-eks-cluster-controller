@@ -45,7 +45,7 @@ Make sure you have following tools installed on your workstation:
     ```
    If you have created cluster using `eksctl`, you may use `eksctl utils write-kubeconfig` option to configure kubeconfig file. *OR*
    You can use `aws eks update-kubeconfig --name <cluster_name>` option to configure kubeconfig file.
-1. Download the package on GO development workstation
+1. Download the package
     ```
     go get github.com/awslabs/aws-eks-cluster-controller
     cd $GOPATH/src/github.com/awslabs/aws-eks-cluster-controller
