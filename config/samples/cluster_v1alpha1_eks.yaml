@@ -5,7 +5,6 @@ metadata:
     controller-tools.k8s.io: "1.0"
   name: eks-sample
 spec:
-  foo: bar
   accountId: "12345678912"    # child AWS account
   crossAccountRoleName: "aws-eks-cluster-controller-management"
   region: "us-test-1"         # region where child EKS cluster need to be created
