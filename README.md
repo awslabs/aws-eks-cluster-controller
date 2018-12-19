@@ -61,14 +61,14 @@ Make sure you have following tools installed on your workstation:
     aws cloudformation create-stack \
         --stack-name aws-eks-controller-role \
         --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-        --template-body file://setupfiles/aws-eks-cluster-controller-role.yaml \
+        --template-body file://config/setup/aws-eks-cluster-controller-role.yaml \
         --parameters \
             ParameterKey=WorkerArn,ParameterValue=${EKS_NODE_WORKER_ARN}
     export IAMROLEARN=`aws iam get-role --role-name aws-eks-cluster-controller --query 'Role.Arn' --output text`
     ```
 1. Setup [kube2iam](https://github.com/jtblin/kube2iam) running in parent cluster
     ```
-    kubectl apply -f setupfiles/kube2iam.yaml
+    kubectl apply -f config/setup/kube2iam.yaml
     ```
 1. Create ECR repo and get the repository URI
     ```
@@ -102,7 +102,7 @@ Make sure you have following tools installed on your workstation:
     aws cloudformation create-stack \
         --stack-name aws-eks-cluster-controller-management \
         --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-        --template-body file://setupfiles/aws-eks-cluster-controller-management-role.yaml \
+        --template-body file://config/setup/aws-eks-cluster-controller-management-role.yaml \
         --parameters \
         ParameterKey=TrustedEntities,ParameterValue=<Comma delimited list of IAM ARNs, User ARNs, etc>
     ```
