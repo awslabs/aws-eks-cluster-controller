@@ -53,7 +53,7 @@ Make sure you have following tools installed on your workstation:
     ```
 1. First time deploy the CRDs or when you update CRD definition
     ```
-    kubectl apply -f config/crds
+    make install
     ```
     *** Follow the steps if you wish to run controller as StatefulSet in your parent EKS cluster, if you are running it from your workstation(for development or debugging) you can ignore them ***
 1. Create your role for use with kube2iam
@@ -65,6 +65,7 @@ Make sure you have following tools installed on your workstation:
         --template-body file://setupfiles/aws-eks-cluster-controller-role.yaml \
         --parameters \
             ParameterKey=WorkerArn,ParameterValue=${EKS_NODE_WORKER_ARN}
+    export IAMROLEARN=`aws iam get-role --role-name aws-eks-cluster-controller | jq -r .Role.Arn`
     ```
 1. Setup [kube2iam](https://github.com/jtblin/kube2iam) running in parent cluster
     ```
@@ -77,7 +78,7 @@ Make sure you have following tools installed on your workstation:
     ```
 1. Build and push docker image to ECR repo
     ```
-    IMG=${REPOSITORY}:latest make docker-build
+    IMG=${REPOSITORY}:latest IAMROLEARN=${IAMROLEARN} make docker-build
     aws ecr get-login --no-include-email | bash -
     docker push ${REPOSITORY}:latest
     ```
