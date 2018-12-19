@@ -29,7 +29,7 @@ Make sure you have following tools installed on your workstation:
 1. [GO development environment](https://golang.org/doc/install)
 1. [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl)
 1. [kubebuilder](https://github.com/kubernetes-sigs/kubebuilder)
-1. [jq](https://stedolan.github.io/jq/download/)
+1. [kustomize](https://github.com/kubernetes-sigs/kustomize)
 
 #### Setup Parent EKS cluster
 1. [Configure AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html), so we can access the AWS account. We will call this parent AWS account.
@@ -45,10 +45,9 @@ Make sure you have following tools installed on your workstation:
     ```
    If you have created cluster using `eksctl`, you may use `eksctl utils write-kubeconfig` option to configure kubeconfig file. *OR*
    You can use `aws eks update-kubeconfig --name <cluster_name>` option to configure kubeconfig file.
-1. Create a directory in your GOPATH and checkout the repo
+1. Download the package on GO development workstation
     ```
-    mkdir -p $GOPATH/src/github.com/awslabs/aws-eks-cluster-controller
-    git clone <aws-eks-cluster-controller repository> $GOPATH/src/github.com/awslabs/aws-eks-cluster-controller
+    go get github.com/awslabs/aws-eks-cluster-controller
     cd $GOPATH/src/github.com/awslabs/aws-eks-cluster-controller
     ```
 1. First time deploy the CRDs or when you update CRD definition
@@ -65,7 +64,7 @@ Make sure you have following tools installed on your workstation:
         --template-body file://setupfiles/aws-eks-cluster-controller-role.yaml \
         --parameters \
             ParameterKey=WorkerArn,ParameterValue=${EKS_NODE_WORKER_ARN}
-    export IAMROLEARN=`aws iam get-role --role-name aws-eks-cluster-controller | jq -r .Role.Arn`
+    export IAMROLEARN=`aws iam get-role --role-name aws-eks-cluster-controller --query 'Role.Arn' --output text`
     ```
 1. Setup [kube2iam](https://github.com/jtblin/kube2iam) running in parent cluster
     ```
@@ -74,7 +73,7 @@ Make sure you have following tools installed on your workstation:
 1. Create ECR repo and get the repository URI
     ```
     aws ecr create-repository --repository-name aws-eks-cluster-controller
-    export REPOSITORY=`aws ecr describe-repositories --repository-name aws-eks-cluster-controller | jq -r .repositories[0].repositoryUri`
+    export REPOSITORY=`aws ecr describe-repositories --repository-name aws-eks-cluster-controller --query 'repositories[0].repositoryUri' --output text`
     ```
 1. Build and push docker image to ECR repo
     ```
