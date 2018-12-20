@@ -18,6 +18,9 @@ package configmap
 
 import (
 	"context"
+	"reflect"
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws/session"
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
@@ -30,14 +33,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"time"
 )
 
 var (
@@ -83,9 +84,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create
-	// Uncomment watch a Deployment created by ConfigMap - change this for objects you create
-
 	return nil
 }
 
@@ -102,10 +100,7 @@ type ReconcileConfigMap struct {
 
 // Reconcile reads that state of the cluster for a ConfigMap object and makes changes based on the state read
 // and what is in the ConfigMap.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
-// a Deployment as an example
-// Automatically generate RBAC rules to allow the Controller to read and write Deployments
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+
 // +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 func (r *ReconcileConfigMap) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the ConfigMap instance
@@ -151,24 +146,26 @@ func (r *ReconcileConfigMap) Reconcile(request reconcile.Request) (reconcile.Res
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		if finalizers.HasFinalizer(instance, ConfigMapFinalizer) {
 			log.Info("deleting config map")
-			instance.Finalizers = finalizers.RemoveFinalizer(instance, ConfigMapFinalizer)
-			if err := r.Client.Update(context.TODO(), instance); err != nil {
-				return reconcile.Result{}, err
-			}
-
 			found := &corev1.ConfigMap{}
-			if err := client.Get(context.TODO(), remoteKey, found); err != nil {
+			err := client.Get(context.TODO(), remoteKey, found)
+			if err != nil && errors.IsNotFound(err) {
+				instance.Finalizers = finalizers.RemoveFinalizer(instance, ConfigMapFinalizer)
+				if err := r.Client.Update(context.TODO(), instance); err != nil {
+					return reconcile.Result{}, err
+				}
+				return reconcile.Result{}, nil
+			} else if err != nil {
 				log.Error("could not get remote configmap", zap.Error(err))
 				return reconcile.Result{}, nil
 			}
+
 			if err := client.Delete(context.TODO(), found); err != nil {
 				log.Error("could not delete remote configmap", zap.Error(err))
-				return reconcile.Result{}, nil
 			}
-			log.Info("configmap deleted")
 			return reconcile.Result{}, nil
 
 		}
+		return reconcile.Result{}, nil
 	}
 
 	rConfigMap := &corev1.ConfigMap{
