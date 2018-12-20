@@ -2,7 +2,7 @@
 
 ## AWS EKS Cluster Controller
 
-The aws-eks-cluster-controller manages cross account EKS clusters and supported Kubernetes resources.
+The aws-eks-cluster-controller manages cross account EKS clusters and [supported Kubernetes resources](docs/CurrentComponenets.md).
 
 This controller is built using the [kubebuilder](https://github.com/kubernetes-sigs/kubebuilder) framework. For more information [read their docs](https://book.kubebuilder.io/)
 
@@ -20,15 +20,18 @@ Make sure you have following tools installed on your workstation:
 1. [aws-cli](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html)
 1. [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl)
 1. [eksctl](https://github.com/weaveworks/eksctl)
-1. [aws-iam-authenticator](https://github.com/kubernetes-sigs/aws-iam-authenticator#4-set-up-kubectl-to-use-authentication-tokens-provided-by-aws-iam-authenticator-for-kubernetes)
-1. [kubebuilder](https://github.com/kubernetes-sigs/kubebuilder)
 1. [jq](https://stedolan.github.io/jq/download/)
+1. [aws-iam-authenticator](https://github.com/kubernetes-sigs/aws-iam-authenticator#4-set-up-kubectl-to-use-authentication-tokens-provided-by-aws-iam-authenticator-for-kubernetes)
+1. [kubebuilder](https://github.com/kubernetes-sigs/kubebuilder) - [install step](https://book.kubebuilder.io/getting_started/installation_and_setup.html)
 
 -- or on MacOS via brew --
 
 ```sh
 brew install kustomize kubernetes-cli eksctl awscli weaveworks/tap/eksctl jq
+go get -u -v github.com/kubernetes-sigs/aws-iam-authenticator/cmd/aws-iam-authenticator
 ```
+And [install kubebuilder](https://book.kubebuilder.io/getting_started/installation_and_setup.html)
+
 
 _IMPORTANT_ make sure your AWS user/role has sufficient permissions to use `eksctl`.
 
