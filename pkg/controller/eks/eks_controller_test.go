@@ -4,8 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awslabs/aws-eks-cluster-controller/pkg/finalizers"
-
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
 
@@ -134,9 +132,6 @@ func TestReconcile(t *testing.T) {
 	err = c.Create(context.TODO(), secret1)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	err = c.Create(context.TODO(), secret2)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	instance.Finalizers = finalizers.AddFinalizer(instance, ComponentsFinalizer)
-	err = c.Update(context.TODO(), instance)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
 	// Delete cluster

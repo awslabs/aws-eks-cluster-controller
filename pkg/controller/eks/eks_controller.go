@@ -230,7 +230,7 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 
 	if instance.Status.Status != "Complete" {
 		instance.Status.Status = "Complete"
-
+		instance.Finalizers = finalizers.AddFinalizer(instance, ComponentsFinalizer)
 		err = r.Update(context.TODO(), instance)
 		if err != nil {
 			return reconcile.Result{}, err
