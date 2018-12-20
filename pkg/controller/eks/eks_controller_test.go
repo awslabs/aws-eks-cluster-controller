@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/finalizers"
+
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
 
@@ -71,11 +73,6 @@ func TestReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 
-	//go func() {
-	//	for range requests {
-	//	}
-	//}()
-
 	controlPlane := &clusterv1alpha1.ControlPlane{}
 	g.Eventually(func() error { return c.Get(context.TODO(), controlPlaneKey, controlPlane) }, timeout).
 		Should(gomega.Succeed())
@@ -105,10 +102,44 @@ func TestReconcile(t *testing.T) {
 		Should(gomega.Succeed())
 
 	g.Eventually(func() (string, error) {
-		eks := &clusterv1alpha1.EKS{}
-		err := c.Get(context.TODO(), eksKey, eks)
-		return eks.Status.Status, err
+		err := c.Get(context.TODO(), eksKey, instance)
+		return instance.Status.Status, err
 	}).Should(gomega.Equal("Complete"))
+
+	//Test that components get deleted
+	secret1 := &componentsv1alpha1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "secret1-foo",
+			Namespace: "default",
+			Labels: map[string]string{
+				"eks.owner.name":      "foo",
+				"eks.owner.namespace": "default",
+			},
+		},
+		Spec: componentsv1alpha1.SecretSpec{},
+	}
+	secret2 := &componentsv1alpha1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "secret2-foo",
+			Namespace: "default",
+			Labels: map[string]string{
+				"eks.owner.name":      "foo",
+				"eks.owner.namespace": "default",
+				"eks.needsdeleting":   "true",
+			},
+		},
+		Spec: componentsv1alpha1.SecretSpec{},
+	}
+
+	err = c.Create(context.TODO(), secret1)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	err = c.Create(context.TODO(), secret2)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	instance.Finalizers = finalizers.AddFinalizer(instance, ComponentsFinalizer)
+	err = c.Update(context.TODO(), instance)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	// Delete cluster
 
 	err = c.Delete(context.TODO(), instance)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -122,6 +153,13 @@ func TestReconcile(t *testing.T) {
 	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup1Key, nodeGroup1) }).ShouldNot(gomega.Succeed())
 	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup2Key, nodeGroup2) }).ShouldNot(gomega.Succeed())
 	g.Eventually(func() error { return c.Get(context.TODO(), controlPlaneKey, controlPlane) }, timeout).ShouldNot(gomega.Succeed())
+
+	g.Eventually(func() error {
+		return c.Get(context.TODO(), types.NamespacedName{Name: "secret1-foo", Namespace: "default"}, &componentsv1alpha1.Secret{})
+	}, timeout).Should(gomega.Succeed())
+	g.Eventually(func() error {
+		return c.Get(context.TODO(), types.NamespacedName{Name: "secret2-foo", Namespace: "default"}, &componentsv1alpha1.Secret{})
+	}, timeout).ShouldNot(gomega.Succeed())
 
 	g.Eventually(func() error { return c.Get(context.TODO(), eksKey, instance) }).ShouldNot(gomega.Succeed())
 
