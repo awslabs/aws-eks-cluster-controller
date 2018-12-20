@@ -4,6 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go/service/cloudformation"
+
+	"github.com/aws/aws-sdk-go/aws/awserr"
+
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/cfnhelper"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
@@ -25,13 +29,13 @@ var cpKey = types.NamespacedName{Name: "foo-cp", Namespace: "default"}
 const timeout = time.Second * 10
 
 // newReconciler returns a new reconcile.Reconciler
-func newTestReconciler(mgr manager.Manager) reconcile.Reconciler {
+func newTestReconciler(mgr manager.Manager) *ReconcileControlPlane {
+	var errDoesNotExist = awserr.New("ValidationError", "Stack with id eks-foo-cluster does not exist", nil)
 	return &ReconcileControlPlane{
 		Client: mgr.GetClient(),
 		scheme: mgr.GetScheme(),
 		log:    logging.New(),
-		sess:   nil,
-		cfnSvc: &cfnhelper.MockCloudformationAPI{},
+		cfnSvc: &cfnhelper.MockCloudformationAPI{FailDescribe: true, Err: errDoesNotExist},
 	}
 }
 
@@ -64,7 +68,8 @@ func TestReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	c = mgr.GetClient()
 
-	recFn, requests := SetupTestReconcile(newTestReconciler(mgr))
+	reconciler := newTestReconciler(mgr)
+	recFn, requests := SetupTestReconcile(reconciler)
 	g.Expect(add(mgr, recFn)).NotTo(gomega.HaveOccurred())
 
 	stopMgr, mgrStopped := StartTestManager(mgr, g)
@@ -79,8 +84,6 @@ func TestReconcile(t *testing.T) {
 
 	// Create the ControlPlane object and expect the Reconcile and Deployment to be created
 	err = c.Create(context.TODO(), instance)
-	// The instance object may not be a valid object because it might be missing some required fields.
-	// Please modify the instance object by adding required fields and then remove the following if statement.
 	if apierrors.IsInvalid(err) {
 		t.Logf("failed to create object, got an invalid object error: %v", err)
 		return
@@ -93,13 +96,17 @@ func TestReconcile(t *testing.T) {
 	g.Eventually(func() (string, error) {
 		err := c.Get(context.TODO(), cpKey, getCP)
 		return getCP.Status.Status, err
+	}).Should(gomega.Equal(StatusCreating))
+
+	reconciler.cfnSvc = &cfnhelper.MockCloudformationAPI{Status: cloudformation.StackStatusCreateComplete}
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
+
+	g.Eventually(func() (string, error) {
+		err := c.Get(context.TODO(), cpKey, getCP)
+		return getCP.Status.Status, err
 	}).Should(gomega.Equal(StatusCreateComplete))
 
 	err = c.Delete(context.TODO(), instance)
-	if apierrors.IsInvalid(err) {
-		t.Logf("failed to delete object, got an invalid object error: %v", err)
-		return
-	}
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 }

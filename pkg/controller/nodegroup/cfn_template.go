@@ -97,7 +97,7 @@ Parameters:
   NodeGroupName:
     Description: Unique identifier for the Node Group.
     Type: String
-    Default: {{ .ClusterName }}-nodegroup-0
+    Default: {{ .NodeInstanceName }}
 
 Resources:
 
@@ -125,7 +125,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
         - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
-      RoleName: {{ .NodeInstanceRoleName }}
+      RoleName: {{ .NodeInstanceName }}-role
 
   NodeSecurityGroup:
     Type: AWS::EC2::SecurityGroup

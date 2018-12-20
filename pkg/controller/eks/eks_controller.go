@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"k8s.io/apimachinery/pkg/types"
 
@@ -173,24 +172,24 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 		instance.Status.Status = "Creating Control Plane"
 		err = r.Update(context.TODO(), instance)
 		if err != nil {
-			return reconcile.Result{RequeueAfter: 5 * time.Second}, err
+			return reconcile.Result{}, err
 		}
-		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+		return reconcile.Result{}, nil
 	case ControlPlaneUpdating:
 		logger.Info("create Control Plane not complete")
-		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
-	case controlplane.StatusError, controlplane.StatusCreateFailed:
+		return reconcile.Result{}, nil
+	case controlplane.StatusError, controlplane.StatusFailed:
 		instance.Status.Status = cpStatus
 		err = r.Update(context.TODO(), instance)
 		if err != nil {
-			return reconcile.Result{RequeueAfter: 5 * time.Second}, err
+			return reconcile.Result{}, err
 		}
 		return reconcile.Result{}, nil
 	case controlplane.StatusCreateComplete:
 		// only create nodegroups if controlplane create completes
 		break
 	default:
-		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+		return reconcile.Result{}, nil
 	}
 
 	ngStatus, err := r.createAllNodeGroups(instance)
@@ -204,13 +203,13 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 		instance.Status.Status = "Creating NodeGroups"
 		err = r.Update(context.TODO(), instance)
 		if err != nil {
-			return reconcile.Result{RequeueAfter: 5 * time.Second}, err
+			return reconcile.Result{}, err
 		}
-		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+		return reconcile.Result{}, nil
 	}
 	if ngStatus == NodeGroupUpdating {
 		logger.Info("create NodeGroups not complete")
-		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+		return reconcile.Result{}, nil
 	}
 
 	err = r.createConfigMap(instance)

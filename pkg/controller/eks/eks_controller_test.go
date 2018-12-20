@@ -81,7 +81,7 @@ func TestReconcile(t *testing.T) {
 		Should(gomega.Succeed())
 
 	// The ControlPlane controller is not running so set it's status manually
-	controlPlane.Status.Status = "Create Control Plane Complete"
+	controlPlane.Status.Status = "Complete"
 	g.Expect(c.Update(context.TODO(), controlPlane)).Should(gomega.Succeed())
 
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
@@ -121,7 +121,7 @@ func TestReconcile(t *testing.T) {
 	g.Eventually(func() error { return c.Get(context.TODO(), configmapKey, configmap) }).ShouldNot(gomega.Succeed())
 	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup1Key, nodeGroup1) }).ShouldNot(gomega.Succeed())
 	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup2Key, nodeGroup2) }).ShouldNot(gomega.Succeed())
-	g.Eventually(func() error { return c.Get(context.TODO(), controlPlaneKey, controlPlane) }).ShouldNot(gomega.Succeed())
+	g.Eventually(func() error { return c.Get(context.TODO(), controlPlaneKey, controlPlane) }, timeout).ShouldNot(gomega.Succeed())
 
 	g.Eventually(func() error { return c.Get(context.TODO(), eksKey, instance) }).ShouldNot(gomega.Succeed())
 
