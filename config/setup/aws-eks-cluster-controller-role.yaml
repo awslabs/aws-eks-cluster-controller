@@ -1,0 +1,51 @@
+# this role need to be created in parent AWS account to be used with kube2iam
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Role for the eks-cluster-controller"
+
+Parameters:
+  WorkerArn:
+    Type: String
+    Description: The arn of the worker nodes used to assume this role
+
+Resources:
+  AWSServiceControllerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: aws-eks-cluster-controller
+      AssumeRolePolicyDocument: !Sub
+        - |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ec2.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+              },
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": "${WorkerArn}"
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          }
+        - WorkerArn: !Ref WorkerArn
+      Policies:
+        - PolicyName: aws-eks-cluster-controller
+          PolicyDocument: |
+            {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sts:AssumeRole"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
