@@ -84,9 +84,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create
-	// Uncomment watch a Deployment created by Ingress - change this for objects you create
-
 	return nil
 }
 
@@ -103,10 +100,6 @@ type ReconcileIngress struct {
 
 // Reconcile reads that state of the cluster for a Ingress object and makes changes based on the state read
 // and what is in the Ingress.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
-// a Deployment as an example
-// Automatically generate RBAC rules to allow the Controller to read and write Deployments
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the Ingress instance
@@ -150,24 +143,26 @@ func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Resul
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		if finalizers.HasFinalizer(instance, IngressFinalizer) {
 			log.Info("deleting ingress")
-			instance.Finalizers = finalizers.RemoveFinalizer(instance, IngressFinalizer)
-			if err := r.Client.Update(context.TODO(), instance); err != nil {
-				return reconcile.Result{}, err
-			}
-
 			found := &extv1beta.Ingress{}
-			if err := client.Get(context.TODO(), remoteKey, found); err != nil {
+			err := client.Get(context.TODO(), remoteKey, found)
+			if err != nil && errors.IsNotFound(err) {
+				instance.Finalizers = finalizers.RemoveFinalizer(instance, IngressFinalizer)
+				if err := r.Client.Update(context.TODO(), instance); err != nil {
+					return reconcile.Result{}, err
+				}
+				return reconcile.Result{}, nil
+			} else if err != nil {
 				log.Error("could not get remote ingress", zap.Error(err))
 				return reconcile.Result{}, nil
 			}
+
 			if err := client.Delete(context.TODO(), found); err != nil {
 				log.Error("could not delete remote ingress", zap.Error(err))
-				return reconcile.Result{}, nil
 			}
-			log.Info("ingress deleted")
 			return reconcile.Result{}, nil
 
 		}
+		return reconcile.Result{}, nil
 	}
 
 	rIngress := &extv1beta.Ingress{

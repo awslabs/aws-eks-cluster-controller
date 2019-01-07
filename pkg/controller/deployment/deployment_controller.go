@@ -100,9 +100,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create
-	// Uncomment watch a Deployment created by Deployment - change this for objects you create
-
 	return nil
 }
 
@@ -119,8 +116,6 @@ type ReconcileDeployment struct {
 
 // Reconcile reads that state of the cluster for a Deployment object and makes changes based on the state read
 // and what is in the Deployment.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
-// a Deployment as an example
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
 // +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cluster.eks.amazonaws.com,resources=eks,verbs=get;list
@@ -163,25 +158,29 @@ func (r *ReconcileDeployment) Reconcile(request reconcile.Request) (reconcile.Re
 	}
 	log.Info("got client")
 
-	// TODO: if deleting - Delete remote deployment
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		if finalizers.HasFinalizer(instance, DeploymentFinalizer) {
-			instance.Finalizers = finalizers.RemoveFinalizer(instance, DeploymentFinalizer)
-			if err := r.Client.Update(context.TODO(), instance); err != nil {
-				return reconcile.Result{}, err
-			}
-
+			log.Info("deleting deployment")
 			found := &appsv1.Deployment{}
-			if err := client.Get(context.TODO(), remoteKey, found); err != nil {
+			err := client.Get(context.TODO(), remoteKey, found)
+			if err != nil && errors.IsNotFound(err) {
+				instance.Finalizers = finalizers.RemoveFinalizer(instance, DeploymentFinalizer)
+				if err := r.Client.Update(context.TODO(), instance); err != nil {
+					return reconcile.Result{}, err
+				}
+				return reconcile.Result{}, nil
+			} else if err != nil {
 				log.Error("could not get remote deployment", zap.Error(err))
 				return reconcile.Result{}, nil
 			}
+
 			if err := client.Delete(context.TODO(), found); err != nil {
 				log.Error("could not delete remote deployment", zap.Error(err))
 			}
 			return reconcile.Result{}, nil
 
 		}
+		return reconcile.Result{}, nil
 	}
 
 	rDeployment := &appsv1.Deployment{
