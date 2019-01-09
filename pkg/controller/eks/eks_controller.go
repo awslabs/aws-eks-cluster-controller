@@ -416,6 +416,12 @@ func (r *ReconcileEKS) deleteNodeGroups(instance *clusterv1alpha1.EKS, logger *z
 		}
 	}
 
+	instance.Status.Status = "Deleting Node Groups"
+	err = r.Update(context.TODO(), instance)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
 	return reconcile.Result{Requeue: true}, nil
 }
 
