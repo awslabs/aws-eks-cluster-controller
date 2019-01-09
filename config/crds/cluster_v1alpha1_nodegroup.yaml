@@ -24,6 +24,8 @@ spec:
           properties:
             name:
               type: string
+            version:
+              type: string
           required:
           - name
           type: object

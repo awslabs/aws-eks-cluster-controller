@@ -197,7 +197,7 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 	if err != nil && cfnhelper.IsDoesNotExist(err, stackName) {
 		logger.Info("creating EKS control plane cloudformation stack")
 
-		err = r.createControlPlaneStack(cfnSvc, stackName, instance.Spec.ClusterName)
+		err = r.createControlPlaneStack(cfnSvc, stackName, instance)
 		if err != nil {
 			r.fail(instance, "error creating controlplane cloudformation stack", err, logger)
 			return reconcile.Result{}, err
@@ -247,9 +247,10 @@ func (r *ReconcileControlPlane) fail(instance *clusterv1alpha1.ControlPlane, msg
 	r.Update(context.TODO(), instance)
 }
 
-func (r *ReconcileControlPlane) createControlPlaneStack(cfnSvc cloudformationiface.CloudFormationAPI, stackName, clusterName string) error {
+func (r *ReconcileControlPlane) createControlPlaneStack(cfnSvc cloudformationiface.CloudFormationAPI, stackName string, instance *clusterv1alpha1.ControlPlane) error {
 	body, err := cfnhelper.GetCFNTemplateBody(controlplaneCFNTemplate, map[string]string{
-		"ClusterName": clusterName,
+		"ClusterName": instance.Spec.ClusterName,
+		"Version":     instance.GetVersion(),
 	})
 
 	_, err = cfnSvc.CreateStack(&cloudformation.CreateStackInput{
@@ -259,7 +260,7 @@ func (r *ReconcileControlPlane) createControlPlaneStack(cfnSvc cloudformationifa
 		Tags: []*cloudformation.Tag{
 			{
 				Key:   aws.String("ClusterName"),
-				Value: aws.String(clusterName),
+				Value: aws.String(instance.Spec.ClusterName),
 			},
 		},
 	})

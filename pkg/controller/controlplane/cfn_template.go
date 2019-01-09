@@ -172,7 +172,7 @@ Resources:
           - !Ref 'Subnet03'
       RoleArn:
         !GetAtt ServiceRole.Arn
-      Version: '1.10'
+      Version: '{{.Version}}'
 Outputs:
 
   SubnetIds:
