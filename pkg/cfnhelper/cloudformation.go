@@ -3,6 +3,7 @@ package cfnhelper
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"text/template"
 
@@ -34,13 +35,18 @@ func DescribeStack(cfnSvc cloudformationiface.CloudFormationAPI, stackName strin
 	return out.Stacks[0], nil
 }
 
-func GetCFNTemplateBody(cfnTemplate string, args map[string]string) (string, error) {
-	templatizedCFN, err := template.New("cfntemplate").Parse(cfnTemplate)
+//GetCFNTemplateBody renders a Cloudformation template
+func GetCFNTemplateBody(cfnTemplate string, input interface{}) (string, error) {
+	templatizedCFN, err := template.New("cfntemplate").Option("missingkey=error").Funcs(template.FuncMap{
+		"quoteList": func(s []string) string {
+			return fmt.Sprintf(`["%s"]`, strings.Join(s, `", "`))
+		}}).Parse(cfnTemplate)
+
 	if err != nil {
 		return "", err
 	}
 	b := bytes.NewBuffer([]byte{})
-	if err := templatizedCFN.Execute(b, args); err != nil {
+	if err := templatizedCFN.Execute(b, input); err != nil {
 		return "", err
 	}
 	return b.String(), nil

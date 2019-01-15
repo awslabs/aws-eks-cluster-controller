@@ -249,6 +249,14 @@ func (r *ReconcileNodeGroup) fail(instance *clusterv1alpha1.NodeGroup, msg strin
 	r.Update(context.TODO(), instance)
 }
 
+type nodeGroupTemplateInput struct {
+	ClusterName           string
+	ControlPlaneStackName string
+	AMI                   string
+	NodeInstanceName      string
+	IAMPolicies           []clusterv1alpha1.Policy
+}
+
 func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup, eks *clusterv1alpha1.EKS) error {
 
 	// These AMIs are found https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-ami.html
@@ -265,11 +273,12 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.Clo
 		"v1.10-eu-north-1": "ami-04b0f84e5a05e0b30",
 	}
 
-	templateBody, err := cfnhelper.GetCFNTemplateBody(nodeGroupCFNTemplate, map[string]string{
-		"ClusterName":           eks.Spec.ControlPlane.ClusterName,
-		"ControlPlaneStackName": eks.GetControlPlaneStackName(),
-		"AMI":                   eksOptimizedAMIs["v1.10-"+eks.Spec.Region],
-		"NodeInstanceName":      nodegroup.Name,
+	templateBody, err := cfnhelper.GetCFNTemplateBody(nodeGroupCFNTemplate, nodeGroupTemplateInput{
+		ClusterName:           eks.Spec.ControlPlane.ClusterName,
+		ControlPlaneStackName: eks.GetControlPlaneStackName(),
+		AMI:                   eksOptimizedAMIs["v1.10-"+eks.Spec.Region],
+		NodeInstanceName:      nodegroup.Name,
+		IAMPolicies:           nodegroup.Spec.IAMPolicies,
 	})
 
 	if err != nil {

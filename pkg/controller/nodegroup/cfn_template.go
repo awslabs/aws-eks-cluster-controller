@@ -125,7 +125,16 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
         - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
-      RoleName: {{ .NodeInstanceName }}-role
+      {{if .IAMPolicies}}Policies:{{range .IAMPolicies}}
+        - PolicyName: {{.PolicyName}}
+          PolicyDocument: 
+            Version: {{.PolicyDocument.Version}}
+            Statement:{{range .PolicyDocument.Statement}}
+            - Effect: {{.Effect}}
+              Action: {{quoteList .Action}}
+              Resource: {{quoteList .Resource}}{{end}}{{end}}
+      {{end -}}
+    RoleName: {{ .NodeInstanceName }}-role
 
   NodeSecurityGroup:
     Type: AWS::EC2::SecurityGroup

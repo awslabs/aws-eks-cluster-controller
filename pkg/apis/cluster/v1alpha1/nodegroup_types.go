@@ -11,7 +11,27 @@ import (
 type NodeGroupSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Name string `json:"name"`
+	Name        string   `json:"name"`
+	IAMPolicies []Policy `json:"iamPolicies"`
+}
+
+// Policy represents an IAM Policy
+type Policy struct {
+	PolicyName     string         `json:"policyName"`
+	PolicyDocument PolicyDocument `json:"policyDocument"`
+}
+
+// PolicyDocument represents an IAM PolicyDocument
+type PolicyDocument struct {
+	Version   string      `json:"version"`
+	Statement []Statement `json:"statement"`
+}
+
+// Statement represents an IAM PolicyDocument Statement
+type Statement struct {
+	Effect   string   `json:"effect"`
+	Action   []string `json:"action"`
+	Resource []string `json:"resource"`
 }
 
 // NodeGroupStatus defines the observed state of NodeGroup

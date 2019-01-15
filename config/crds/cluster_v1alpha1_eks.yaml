@@ -36,10 +36,48 @@ spec:
             nodeGroups:
               items:
                 properties:
+                  iamPolicies:
+                    items:
+                      properties:
+                        policyDocument:
+                          properties:
+                            statement:
+                              items:
+                                properties:
+                                  action:
+                                    items:
+                                      type: string
+                                    type: array
+                                  effect:
+                                    type: string
+                                  resource:
+                                    items:
+                                      type: string
+                                    type: array
+                                required:
+                                - effect
+                                - action
+                                - resource
+                                type: object
+                              type: array
+                            version:
+                              type: string
+                          required:
+                          - version
+                          - statement
+                          type: object
+                        policyName:
+                          type: string
+                      required:
+                      - policyName
+                      - policyDocument
+                      type: object
+                    type: array
                   name:
                     type: string
                 required:
                 - name
+                - iamPolicies
                 type: object
               type: array
             region:
@@ -97,10 +135,48 @@ spec:
                         type: object
                       spec:
                         properties:
+                          iamPolicies:
+                            items:
+                              properties:
+                                policyDocument:
+                                  properties:
+                                    statement:
+                                      items:
+                                        properties:
+                                          action:
+                                            items:
+                                              type: string
+                                            type: array
+                                          effect:
+                                            type: string
+                                          resource:
+                                            items:
+                                              type: string
+                                            type: array
+                                        required:
+                                        - effect
+                                        - action
+                                        - resource
+                                        type: object
+                                      type: array
+                                    version:
+                                      type: string
+                                  required:
+                                  - version
+                                  - statement
+                                  type: object
+                                policyName:
+                                  type: string
+                              required:
+                              - policyName
+                              - policyDocument
+                              type: object
+                            type: array
                           name:
                             type: string
                         required:
                         - name
+                        - iamPolicies
                         type: object
                       status:
                         properties:
