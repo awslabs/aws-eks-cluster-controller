@@ -15,8 +15,8 @@ func TestGetAMI(t *testing.T) {
 	}
 
 	tests := []test{}
-	for _, version := range clusterv1alpha1.ValidVersions {
-		for _, region := range clusterv1alpha1.ValidRegions {
+	for _, version := range clusterv1alpha1.SupportedVersions {
+		for _, region := range clusterv1alpha1.SupportedRegions {
 			tests = append(tests, test{
 				name:    fmt.Sprintf("There should be a valid AMI for v%s in %s", version, region),
 				version: version,

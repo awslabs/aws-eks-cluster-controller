@@ -1,6 +1,7 @@
 package v1alpha1
 
-var ValidRegions = []string{
+// Supported is the current list of supported eks regions 2019-01-15 (https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/)
+var SupportedRegions = []string{
 	"us-west-2",
 	"us-east-1",
 	"us-east-2",
@@ -12,11 +13,12 @@ var ValidRegions = []string{
 	"ap-southeast-2",
 }
 
-func IsValidRegion(region *string) bool {
+// IsSupportedRegion reports if the region passed is supported by EKS
+func IsSupportedRegion(region *string) bool {
 	if region == nil {
 		return false
 	}
-	for _, reg := range ValidRegions {
+	for _, reg := range SupportedRegions {
 		if reg == *region {
 			return true
 		}

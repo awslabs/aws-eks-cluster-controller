@@ -1,17 +1,19 @@
 package v1alpha1
 
-var ValidVersions = []string{
+// SupportedVersions is the list of current supported verisons of EKS (AC 2019-01-15) (https://docs.aws.amazon.com/eks/latest/userguide/platform-versions.html)
+var SupportedVersions = []string{
 	"1.10",
 	"1.11",
 }
 
+// DefaultVersion is the version that is used if none is supplied
 const DefaultVersion string = "1.11"
 
-func isValidVersion(version *string) bool {
+func isSupportedVersion(version *string) bool {
 	if version == nil {
 		return false
 	}
-	for _, ver := range ValidVersions {
+	for _, ver := range SupportedVersions {
 		if ver == *version {
 			return true
 		}

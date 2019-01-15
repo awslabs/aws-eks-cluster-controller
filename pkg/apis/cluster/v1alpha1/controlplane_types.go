@@ -52,7 +52,7 @@ func init() {
 }
 
 func (cp *ControlPlane) GetVersion() string {
-	if isValidVersion(cp.Spec.Version) {
+	if isSupportedVersion(cp.Spec.Version) {
 		return *cp.Spec.Version
 	}
 	return DefaultVersion

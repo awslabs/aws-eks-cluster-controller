@@ -50,7 +50,7 @@ func init() {
 }
 
 func (ng *NodeGroup) GetVersion() string {
-	if isValidVersion(ng.Spec.Version) {
+	if isSupportedVersion(ng.Spec.Version) {
 		return *ng.Spec.Version
 	}
 	return DefaultVersion

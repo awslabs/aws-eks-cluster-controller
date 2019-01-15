@@ -28,6 +28,7 @@ var eksOptimizedAMIs = map[string]string{
 	"1.10-ap-southeast-2": "ami-05d25b3f16e685c2e",
 }
 
+// GetAMI returns the latest AMI for a supported Version and Region. The current ami list can be found at https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-ami.html
 func GetAMI(version, region string) string {
 	verisonRegion := fmt.Sprintf("%s-%s", version, region)
 	return eksOptimizedAMIs[verisonRegion]
