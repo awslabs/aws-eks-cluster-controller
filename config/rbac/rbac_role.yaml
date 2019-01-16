@@ -5,18 +5,6 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
   - components.eks.amazonaws.com
   resources:
   - configmaps
@@ -98,18 +86,6 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
   - components.eks.amazonaws.com
   resources:
   - ingresses
@@ -146,33 +122,9 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
   - components.eks.amazonaws.com
   resources:
   - secrets
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - apps
-  resources:
-  - deployments
   verbs:
   - get
   - list

@@ -251,24 +251,10 @@ func (r *ReconcileNodeGroup) fail(instance *clusterv1alpha1.NodeGroup, msg strin
 
 func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup, eks *clusterv1alpha1.EKS) error {
 
-	// These AMIs are found https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-ami.html
-	var eksOptimizedAMIs = map[string]string{
-		"v1.11-us-west-2":  "ami-094fa4044a2a3cf52",
-		"v1.11-us-east-1":  "ami-0b4eb1d8782fc3aea",
-		"v1.11-us-east-2":  "ami-053cbe66e0033ebcf",
-		"v1.11-eu-west-1":  "ami-0a9006fb385703b54",
-		"v1.11-eu-north-1": "ami-082e6cf1c07e60241",
-		"v1.10-us-west-2":  "ami-07af9511082779ae7",
-		"v1.10-us-east-1":  "ami-027792c3cc6de7b5b",
-		"v1.10-us-east-2":  "ami-036130f4127a367f7",
-		"v1.10-eu-west-1":  "ami-03612357ac9da2c7d",
-		"v1.10-eu-north-1": "ami-04b0f84e5a05e0b30",
-	}
-
 	templateBody, err := cfnhelper.GetCFNTemplateBody(nodeGroupCFNTemplate, map[string]string{
 		"ClusterName":           eks.Spec.ControlPlane.ClusterName,
 		"ControlPlaneStackName": eks.GetControlPlaneStackName(),
-		"AMI":                   eksOptimizedAMIs["v1.10-"+eks.Spec.Region],
+		"AMI":                   GetAMI(nodegroup.GetVersion(), eks.Spec.Region),
 		"NodeInstanceName":      nodegroup.Name,
 	})
 

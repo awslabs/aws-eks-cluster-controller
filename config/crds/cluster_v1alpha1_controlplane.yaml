@@ -24,6 +24,8 @@ spec:
           properties:
             clusterName:
               type: string
+            version:
+              type: string
           required:
           - clusterName
           type: object

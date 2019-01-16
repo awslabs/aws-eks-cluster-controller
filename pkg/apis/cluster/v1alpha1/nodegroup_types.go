@@ -12,6 +12,8 @@ type NodeGroupSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	Name string `json:"name"`
+
+	Version *string `json:"version,omitempty"`
 }
 
 // NodeGroupStatus defines the observed state of NodeGroup
@@ -45,4 +47,11 @@ type NodeGroupList struct {
 
 func init() {
 	SchemeBuilder.Register(&NodeGroup{}, &NodeGroupList{})
+}
+
+func (ng *NodeGroup) GetVersion() string {
+	if isSupportedVersion(ng.Spec.Version) {
+		return *ng.Spec.Version
+	}
+	return DefaultVersion
 }
