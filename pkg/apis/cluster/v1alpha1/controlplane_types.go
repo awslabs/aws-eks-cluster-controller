@@ -12,6 +12,8 @@ type ControlPlaneSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	ClusterName string `json:"clusterName"`
+	// +optional
+	Version *string `json:"version,omitempty"`
 }
 
 // ControlPlaneStatus defines the observed state of ControlPlane
@@ -47,4 +49,11 @@ type ControlPlaneList struct {
 
 func init() {
 	SchemeBuilder.Register(&ControlPlane{}, &ControlPlaneList{})
+}
+
+func (cp *ControlPlane) GetVersion() string {
+	if isSupportedVersion(cp.Spec.Version) {
+		return *cp.Spec.Version
+	}
+	return DefaultVersion
 }

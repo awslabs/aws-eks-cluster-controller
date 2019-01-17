@@ -61,6 +61,8 @@ spec:
               type: array
             name:
               type: string
+            version:
+              type: string
           required:
           - name
           - iamPolicies

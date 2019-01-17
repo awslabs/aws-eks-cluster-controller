@@ -276,7 +276,7 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.Clo
 	templateBody, err := cfnhelper.GetCFNTemplateBody(nodeGroupCFNTemplate, nodeGroupTemplateInput{
 		ClusterName:           eks.Spec.ControlPlane.ClusterName,
 		ControlPlaneStackName: eks.GetControlPlaneStackName(),
-		AMI:                   eksOptimizedAMIs["v1.10-"+eks.Spec.Region],
+		AMI:                   GetAMI(nodegroup.GetVersion(), eks.Spec.Region),
 		NodeInstanceName:      nodegroup.Name,
 		IAMPolicies:           nodegroup.Spec.IAMPolicies,
 	})

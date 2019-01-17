@@ -100,10 +100,6 @@ type ReconcileSecret struct {
 
 // Reconcile reads that state of the cluster for a Secret object and makes changes based on the state read
 // and what is in the Secret.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
-// a Deployment as an example
-// Automatically generate RBAC rules to allow the Controller to read and write Deployments
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 func (r *ReconcileSecret) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	log := r.log.With(
@@ -147,24 +143,26 @@ func (r *ReconcileSecret) Reconcile(request reconcile.Request) (reconcile.Result
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		if finalizers.HasFinalizer(instance, SecretFinalizer) {
 			log.Info("deleting secret")
-			instance.Finalizers = finalizers.RemoveFinalizer(instance, SecretFinalizer)
-			if err := r.Client.Update(context.TODO(), instance); err != nil {
-				return reconcile.Result{}, err
-			}
-
 			found := &corev1.Secret{}
-			if err := client.Get(context.TODO(), remoteKey, found); err != nil {
+			err := client.Get(context.TODO(), remoteKey, found)
+			if err != nil && errors.IsNotFound(err) {
+				instance.Finalizers = finalizers.RemoveFinalizer(instance, SecretFinalizer)
+				if err := r.Client.Update(context.TODO(), instance); err != nil {
+					return reconcile.Result{}, err
+				}
+				return reconcile.Result{}, nil
+			} else if err != nil {
 				log.Error("could not get remote secret", zap.Error(err))
 				return reconcile.Result{}, nil
 			}
+
 			if err := client.Delete(context.TODO(), found); err != nil {
 				log.Error("could not delete remote secret", zap.Error(err))
-				return reconcile.Result{}, nil
 			}
-			log.Info("secret deleted")
 			return reconcile.Result{}, nil
 
 		}
+		return reconcile.Result{}, nil
 	}
 
 	rSecret := &corev1.Secret{

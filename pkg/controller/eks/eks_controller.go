@@ -94,6 +94,7 @@ var _ reconcile.Reconciler = &ReconcileEKS{}
 var (
 	NodeGroupFinalizer    = "nodegroup.eks.amazonaws.com"
 	ControlPlaneFinalizer = "controlplane.eks.amazonaws.com"
+	ComponentsFinalizer   = "components.eks.amazonaws.com"
 )
 
 // ReconcileEKS reconciles a EKS object
@@ -136,6 +137,15 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		logger.Info("deleting eks")
+
+		if finalizers.HasFinalizer(instance, ComponentsFinalizer) {
+			result, err := r.deleteComponents(instance, logger)
+			if err != nil {
+				logger.Error("Error Deleting Components", zap.Error(err))
+			}
+			return result, err
+		}
+
 		if err := r.deleteConfigmap(instance); err != nil {
 			logger.Error("Error Deleting Configmap", zap.Error(err))
 			return reconcile.Result{}, err
@@ -220,7 +230,7 @@ func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, e
 
 	if instance.Status.Status != "Complete" {
 		instance.Status.Status = "Complete"
-
+		instance.Finalizers = finalizers.AddFinalizer(instance, ComponentsFinalizer)
 		err = r.Update(context.TODO(), instance)
 		if err != nil {
 			return reconcile.Result{}, err
@@ -406,6 +416,12 @@ func (r *ReconcileEKS) deleteNodeGroups(instance *clusterv1alpha1.EKS, logger *z
 		}
 	}
 
+	instance.Status.Status = "Deleting Node Groups"
+	err = r.Update(context.TODO(), instance)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
 	return reconcile.Result{Requeue: true}, nil
 }
 
@@ -447,5 +463,24 @@ func (r *ReconcileEKS) deleteControlPlane(instance *clusterv1alpha1.EKS, logger 
 		return reconcile.Result{}, err
 	}
 
+	return reconcile.Result{Requeue: true}, nil
+}
+
+func (r *ReconcileEKS) deleteComponents(instance *clusterv1alpha1.EKS, logger *zap.Logger) (reconcile.Result, error) {
+
+	count, err := deleteComponents(instance.Name, instance.Namespace, r, logger)
+	if err != nil {
+		logger.Error("error deleting components", zap.Error(err))
+		return reconcile.Result{}, err
+	}
+	if count == 0 {
+		instance.Finalizers = finalizers.RemoveFinalizer(instance, ComponentsFinalizer)
+		err := r.Update(context.TODO(), instance)
+		if err != nil {
+			logger.Error("error removing Finalizer", zap.Error(err))
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{Requeue: true}, nil
+	}
 	return reconcile.Result{Requeue: true}, nil
 }
