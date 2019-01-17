@@ -81,7 +81,6 @@ spec:
                     type: string
                 required:
                 - name
-                - iamPolicies
                 type: object
               type: array
             region:
@@ -184,7 +183,6 @@ spec:
                             type: string
                         required:
                         - name
-                        - iamPolicies
                         type: object
                       status:
                         properties:

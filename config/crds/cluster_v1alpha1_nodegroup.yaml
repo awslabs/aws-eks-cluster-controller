@@ -65,7 +65,6 @@ spec:
               type: string
           required:
           - name
-          - iamPolicies
           type: object
         status:
           properties:

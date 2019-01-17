@@ -20,8 +20,7 @@ func TestStorageNodeGroup(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: NodeGroupSpec{
-			Name:        "node-foo",
-			IAMPolicies: []Policy{},
+			Name: "node-foo",
 		}}
 	g := gomega.NewGomegaWithT(t)
 

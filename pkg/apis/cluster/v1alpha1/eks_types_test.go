@@ -27,12 +27,8 @@ func TestStorageEKS(t *testing.T) {
 				ClusterName: "ClusterFoo",
 			},
 			NodeGroups: []NodeGroupSpec{
-				NodeGroupSpec{
-					IAMPolicies: []Policy{},
-				},
-				NodeGroupSpec{
-					IAMPolicies: []Policy{},
-				},
+				NodeGroupSpec{},
+				NodeGroupSpec{},
 			},
 		},
 	}
