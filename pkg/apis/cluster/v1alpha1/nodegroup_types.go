@@ -11,7 +11,8 @@ import (
 type NodeGroupSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Name    string  `json:"name"`
+	Name string `json:"name"`
+	// +optional
 	Version *string `json:"version,omitempty"`
 	// +optional
 	IAMPolicies []Policy `json:"iamPolicies,omitempty"`
