@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/cfnhelper"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
@@ -32,7 +33,7 @@ func getEKSCluster(name string) *clusterv1alpha1.EKS {
 				ClusterName: "cluster-stuff",
 			},
 			NodeGroups: []clusterv1alpha1.NodeGroupSpec{
-				clusterv1alpha1.NodeGroupSpec{Name: "NG1"},
+				clusterv1alpha1.NodeGroupSpec{Name: "NG1", IAMPolicies: []v1alpha1.Policy{}},
 			},
 		},
 	}
@@ -64,7 +65,8 @@ func TestNodeGroupReconcile(t *testing.T) {
 			Labels:    map[string]string{"eks.owner.name": "eks-foopla", "eks.owner.namespace": "default"},
 		},
 		Spec: clusterv1alpha1.NodeGroupSpec{
-			Name: "ngroup1",
+			Name:        "ngroup1",
+			IAMPolicies: []v1alpha1.Policy{},
 		},
 	}
 

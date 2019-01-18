@@ -249,13 +249,22 @@ func (r *ReconcileNodeGroup) fail(instance *clusterv1alpha1.NodeGroup, msg strin
 	r.Update(context.TODO(), instance)
 }
 
+type nodeGroupTemplateInput struct {
+	ClusterName           string
+	ControlPlaneStackName string
+	AMI                   string
+	NodeInstanceName      string
+	IAMPolicies           []clusterv1alpha1.Policy
+}
+
 func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup, eks *clusterv1alpha1.EKS) error {
 
-	templateBody, err := cfnhelper.GetCFNTemplateBody(nodeGroupCFNTemplate, map[string]string{
-		"ClusterName":           eks.Spec.ControlPlane.ClusterName,
-		"ControlPlaneStackName": eks.GetControlPlaneStackName(),
-		"AMI":                   GetAMI(nodegroup.GetVersion(), eks.Spec.Region),
-		"NodeInstanceName":      nodegroup.Name,
+	templateBody, err := cfnhelper.GetCFNTemplateBody(nodeGroupCFNTemplate, nodeGroupTemplateInput{
+		ClusterName:           eks.Spec.ControlPlane.ClusterName,
+		ControlPlaneStackName: eks.GetControlPlaneStackName(),
+		AMI:                   GetAMI(nodegroup.GetVersion(), eks.Spec.Region),
+		NodeInstanceName:      nodegroup.Name,
+		IAMPolicies:           nodegroup.Spec.IAMPolicies,
 	})
 
 	if err != nil {

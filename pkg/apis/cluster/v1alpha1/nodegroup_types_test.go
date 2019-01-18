@@ -43,3 +43,32 @@ func TestStorageNodeGroup(t *testing.T) {
 	g.Expect(c.Delete(context.TODO(), fetched)).NotTo(gomega.HaveOccurred())
 	g.Expect(c.Get(context.TODO(), key, fetched)).To(gomega.HaveOccurred())
 }
+
+func TestStorageNodeGroupWithIAMPolicies(t *testing.T) {
+	key := types.NamespacedName{
+		Name:      "foo",
+		Namespace: "withpolicy",
+	}
+	created := &NodeGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "withpolicy",
+		},
+		Spec: NodeGroupSpec{
+			Name:        "node-foo",
+			IAMPolicies: []Policy{},
+		}}
+	g := gomega.NewGomegaWithT(t)
+
+	// Test Create
+	fetched := &NodeGroup{
+		Spec: NodeGroupSpec{
+			Name:        "test",
+			IAMPolicies: []Policy{},
+		},
+	}
+	g.Expect(c.Create(context.TODO(), created)).NotTo(gomega.HaveOccurred())
+
+	g.Expect(c.Get(context.TODO(), key, fetched)).NotTo(gomega.HaveOccurred())
+	g.Expect(fetched).To(gomega.Equal(created))
+}

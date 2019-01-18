@@ -9,7 +9,23 @@ spec:
   crossAccountRoleName: "aws-eks-cluster-controller-management"
   region: "us-test-1"         # region where child EKS cluster need to be created
   controlPlane:
-    clusterName: "eks-1"
+    clusterName: "eks-sample"
   nodeGroups:
-    - {name: "g1"}
-    - {name: "g2"}
+    - name: "g1"
+      iamPolicies: 
+        - policyName: "root"
+          policyDocument: 
+            version: "2012-10-17"
+            statement: 
+              - effect: "Allow"
+                action: ["*"]
+                resource: ["*"]
+    - name: "g2"
+      iamPolicies: 
+        - policyName: "root"
+          policyDocument: 
+            version: "2012-10-17"
+            statement: 
+              - effect: "Allow"
+                action: ["*"]
+                resource: ["*"]

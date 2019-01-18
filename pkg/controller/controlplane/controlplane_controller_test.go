@@ -50,7 +50,7 @@ func TestReconcile(t *testing.T) {
 				ClusterName: "foo-cluster",
 			},
 			CrossAccountRoleName: "foo-role",
-			NodeGroups:           []clusterv1alpha1.NodeGroupSpec{{Name: "foo-ng"}},
+			NodeGroups:           []clusterv1alpha1.NodeGroupSpec{{Name: "foo-ng", IAMPolicies: []clusterv1alpha1.Policy{}}},
 			Region:               "us-test-1",
 		},
 	}
