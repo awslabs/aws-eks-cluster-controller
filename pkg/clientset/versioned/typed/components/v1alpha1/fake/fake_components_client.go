@@ -28,6 +28,14 @@ type FakeComponentsV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeComponentsV1alpha1) ClusterRoles(namespace string) v1alpha1.ClusterRoleInterface {
+	return &FakeClusterRoles{c, namespace}
+}
+
+func (c *FakeComponentsV1alpha1) ClusterRoleBindings(namespace string) v1alpha1.ClusterRoleBindingInterface {
+	return &FakeClusterRoleBindings{c, namespace}
+}
+
 func (c *FakeComponentsV1alpha1) ConfigMaps(namespace string) v1alpha1.ConfigMapInterface {
 	return &FakeConfigMaps{c, namespace}
 }
@@ -46,6 +54,10 @@ func (c *FakeComponentsV1alpha1) Secrets(namespace string) v1alpha1.SecretInterf
 
 func (c *FakeComponentsV1alpha1) Services(namespace string) v1alpha1.ServiceInterface {
 	return &FakeServices{c, namespace}
+}
+
+func (c *FakeComponentsV1alpha1) ServiceAccounts(namespace string) v1alpha1.ServiceAccountInterface {
+	return &FakeServiceAccounts{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

@@ -467,6 +467,11 @@ func (r *ReconcileEKS) deleteControlPlane(instance *clusterv1alpha1.EKS, logger 
 }
 
 func (r *ReconcileEKS) deleteComponents(instance *clusterv1alpha1.EKS, logger *zap.Logger) (reconcile.Result, error) {
+	instance.Status.Status = "Deleting Components"
+	err := r.Update(context.TODO(), instance)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 
 	count, err := deleteComponents(instance.Name, instance.Namespace, r, logger)
 	if err != nil {
@@ -482,5 +487,6 @@ func (r *ReconcileEKS) deleteComponents(instance *clusterv1alpha1.EKS, logger *z
 		}
 		return reconcile.Result{Requeue: true}, nil
 	}
+
 	return reconcile.Result{Requeue: true}, nil
 }
