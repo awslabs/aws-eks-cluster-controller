@@ -32,9 +32,6 @@ type ClusterRoleSpec struct {
 	rbacv1.ClusterRole `json:",inline"`
 	Cluster            string `json:"cluster"`
 	Name               string `json:"name"`
-	// ClusterRole isn't a namespaced resource - we need this here so that we can build/run tests
-	// +optional
-	// Namespace string `json:"namespace,omitempty"`
 }
 
 // ClusterRoleStatus defines the observed state of ClusterRole
