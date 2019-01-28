@@ -5,6 +5,86 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - apps
+  resources:
+  - deployments/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - components.eks.amazonaws.com
+  resources:
+  - clusterroles
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - components.eks.amazonaws.com
+  resources:
+  - clusterroles/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - apps
+  resources:
+  - deployments/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - components.eks.amazonaws.com
+  resources:
+  - clusterrolebindings
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - components.eks.amazonaws.com
+  resources:
+  - clusterrolebindings/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
   - components.eks.amazonaws.com
   resources:
   - configmaps
@@ -145,6 +225,46 @@ rules:
   - update
   - patch
   - delete
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - apps
+  resources:
+  - deployments/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - components.eks.amazonaws.com
+  resources:
+  - serviceaccounts
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - components.eks.amazonaws.com
+  resources:
+  - serviceaccounts/status
+  verbs:
+  - get
+  - update
+  - patch
 - apiGroups:
   - admissionregistration.k8s.io
   resources:

@@ -100,16 +100,21 @@ func TestEKSAuthorizer_GetClient(t *testing.T) {
 
 type fakeEKSSvc struct {
 	eksiface.EKSAPI
+	describeClusterOutput *eks.DescribeClusterOutput
 }
 
 func (s fakeEKSSvc) DescribeCluster(*eks.DescribeClusterInput) (*eks.DescribeClusterOutput, error) {
-	return &eks.DescribeClusterOutput{
-		Cluster: &eks.Cluster{
-			CertificateAuthority: &eks.Certificate{Data: aws.String("CA1234")},
-			Endpoint:             aws.String("endpoint-foo1"),
-			Name:                 aws.String("Name1"),
-		},
-	}, nil
+	if s.describeClusterOutput == nil {
+		return &eks.DescribeClusterOutput{
+			Cluster: &eks.Cluster{
+				CertificateAuthority: &eks.Certificate{Data: aws.String("CA1234")},
+				Endpoint:             aws.String("endpoint-foo1"),
+				Name:                 aws.String("Name1"),
+			},
+		}, nil
+	}
+
+	return s.describeClusterOutput, nil
 }
 
 func Test_buildKubeconfig(t *testing.T) {
@@ -131,7 +136,56 @@ func Test_buildKubeconfig(t *testing.T) {
 			},
 			want: []byte(wantKubeConfig),
 		},
+		{
+			name: "fails when cluster name is nil",
+			args: args{
+				clusterName: "stuff",
+				eksSvc: fakeEKSSvc{
+					describeClusterOutput: &eks.DescribeClusterOutput{
+						Cluster: &eks.Cluster{
+							CertificateAuthority: &eks.Certificate{Data: aws.String("CA1234")},
+							Endpoint:             aws.String("endpoint-foo1"),
+							Name:                 nil,
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "fails when cluster endpoint is nil",
+			args: args{
+				clusterName: "stuff",
+				eksSvc: fakeEKSSvc{
+					describeClusterOutput: &eks.DescribeClusterOutput{
+						Cluster: &eks.Cluster{
+							CertificateAuthority: &eks.Certificate{Data: aws.String("CA1234")},
+							Endpoint:             nil,
+							Name:                 aws.String("foo"),
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "fails when certificate authority data is nil",
+			args: args{
+				clusterName: "stuff",
+				eksSvc: fakeEKSSvc{
+					describeClusterOutput: &eks.DescribeClusterOutput{
+						Cluster: &eks.Cluster{
+							CertificateAuthority: &eks.Certificate{Data: nil},
+							Endpoint:             aws.String("bar"),
+							Name:                 aws.String("foo"),
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			auth := &EKSAuthorizer{
