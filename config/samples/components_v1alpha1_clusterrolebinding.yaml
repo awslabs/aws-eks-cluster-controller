@@ -1,0 +1,18 @@
+apiVersion: components.eks.amazonaws.com/v1alpha1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: clusterrolebinding-sample
+spec:
+  cluster: foobar
+  name: foobar-clusterrolebinding
+  subjects:
+  - kind: ServiceAccount
+    name: foobar-serviceaccount
+    namespace: default
+  roleRef:
+    kind: ClusterRole
+    name: foobar-clusterrole
+    apiGroup: rbac.authorization.k8s.io
+

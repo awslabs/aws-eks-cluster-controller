@@ -28,7 +28,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -170,16 +169,6 @@ func (r *ReconcileClusterRole) Reconcile(request reconcile.Request) (reconcile.R
 			err := client.Get(context.TODO(), remoteKey, found)
 			if err != nil && errors.IsNotFound(err) {
 				instance.Finalizers = finalizers.RemoveFinalizer(instance, ClusterRoleFinalizer)
-				instance.ObjectMeta.OwnerReferences = []v1.OwnerReference{
-					{
-						APIVersion:         "cluster.eks.amazonaws.com/v1alpha1",
-						Kind:               "EKS",
-						Name:               cluster.ObjectMeta.Name,
-						UID:                cluster.ObjectMeta.UID,
-						Controller:         func(b bool) *bool { return &b }(true),
-						BlockOwnerDeletion: func(b bool) *bool { return &b }(true),
-					},
-				}
 				if err := r.Client.Update(context.TODO(), instance); err != nil {
 					return reconcile.Result{}, err
 				}

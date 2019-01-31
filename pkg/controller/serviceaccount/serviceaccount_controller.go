@@ -200,7 +200,6 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		}
 		instance.Finalizers = []string{ServiceAccountFinalizer}
 		instance.Status.Status = "Created"
-
 		if err := r.Client.Update(context.TODO(), instance); err != nil {
 			log.Error("failed to create serviceaccount", zap.Error(err))
 			return reconcile.Result{}, err

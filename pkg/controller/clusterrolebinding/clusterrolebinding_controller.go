@@ -209,7 +209,6 @@ func (r *ReconcileClusterRoleBinding) Reconcile(request reconcile.Request) (reco
 		}
 		instance.Finalizers = []string{ClusterRoleBindingFinalizer}
 		instance.Status.Status = "Created"
-
 		if err := r.Client.Update(context.TODO(), instance); err != nil {
 			log.Error("failed to create clusterrolebinding", zap.Error(err))
 			return reconcile.Result{}, err

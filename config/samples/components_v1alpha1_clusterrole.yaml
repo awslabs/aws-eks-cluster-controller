@@ -1,0 +1,16 @@
+apiVersion: components.eks.amazonaws.com/v1alpha1
+kind: ClusterRole
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: clusterrole-sample
+spec:
+  cluster: foobar
+  name: foobar-clusterrole
+  rules:
+  - apiGroups:
+    - ""
+    resources:
+    - "*"
+    verbs:
+    - "*"

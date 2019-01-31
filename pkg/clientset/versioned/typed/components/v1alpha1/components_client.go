@@ -27,16 +27,27 @@ import (
 
 type ComponentsV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	ClusterRolesGetter
+	ClusterRoleBindingsGetter
 	ConfigMapsGetter
 	DeploymentsGetter
 	IngressesGetter
 	SecretsGetter
 	ServicesGetter
+	ServiceAccountsGetter
 }
 
 // ComponentsV1alpha1Client is used to interact with features provided by the components.eks.amazonaws.com group.
 type ComponentsV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *ComponentsV1alpha1Client) ClusterRoles(namespace string) ClusterRoleInterface {
+	return newClusterRoles(c, namespace)
+}
+
+func (c *ComponentsV1alpha1Client) ClusterRoleBindings(namespace string) ClusterRoleBindingInterface {
+	return newClusterRoleBindings(c, namespace)
 }
 
 func (c *ComponentsV1alpha1Client) ConfigMaps(namespace string) ConfigMapInterface {
@@ -57,6 +68,10 @@ func (c *ComponentsV1alpha1Client) Secrets(namespace string) SecretInterface {
 
 func (c *ComponentsV1alpha1Client) Services(namespace string) ServiceInterface {
 	return newServices(c, namespace)
+}
+
+func (c *ComponentsV1alpha1Client) ServiceAccounts(namespace string) ServiceAccountInterface {
+	return newServiceAccounts(c, namespace)
 }
 
 // NewForConfig creates a new ComponentsV1alpha1Client for the given config.

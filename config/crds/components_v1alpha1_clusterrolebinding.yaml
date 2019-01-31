@@ -1,0 +1,59 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  creationTimestamp: null
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: clusterrolebindings.components.eks.amazonaws.com
+spec:
+  group: components.eks.amazonaws.com
+  names:
+    kind: ClusterRoleBinding
+    plural: clusterrolebindings
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      properties:
+        apiVersion:
+          type: string
+        kind:
+          type: string
+        metadata:
+          type: object
+        spec:
+          properties:
+            apiVersion:
+              type: string
+            cluster:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            name:
+              type: string
+            namespace:
+              type: string
+            roleRef:
+              type: object
+            subjects:
+              items:
+                type: object
+              type: array
+          required:
+          - roleRef
+          - cluster
+          - name
+          type: object
+        status:
+          properties:
+            status:
+              type: string
+          type: object
+  version: v1alpha1
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
