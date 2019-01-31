@@ -58,6 +58,21 @@ func deleteComponents(ownerName, ownerNamespace string, c client.Client, logger 
 				item := obj
 				delete = append(delete, &item)
 			}
+		case *componentsv1alpha1.ClusterRoleList:
+			for _, obj := range l.Items {
+				item := obj
+				delete = append(delete, &item)
+			}
+		case *componentsv1alpha1.ClusterRoleBindingList:
+			for _, obj := range l.Items {
+				item := obj
+				delete = append(delete, &item)
+			}
+		case *componentsv1alpha1.ServiceAccountList:
+			for _, obj := range l.Items {
+				item := obj
+				delete = append(delete, &item)
+			}
 		default:
 			logger.Error("Got object type we didn't understand", zap.Any("object", l))
 			return 0, fmt.Errorf("unknown type error")

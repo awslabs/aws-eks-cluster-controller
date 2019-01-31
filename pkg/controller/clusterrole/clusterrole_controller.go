@@ -1,6 +1,3 @@
-// Copyright 2018 Aaron Clawson
-// Copyright 2018 Alex Tanton
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,7 +11,7 @@
 // limitations under the License.
 //
 
-package ingress
+package clusterrole
 
 import (
 	"context"
@@ -28,9 +25,10 @@ import (
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/finalizers"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
 	"go.uber.org/zap"
-	extv1beta "k8s.io/api/extensions/v1beta1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,18 +39,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var (
-	IngressFinalizer = "ingress.components.eks.amazon.com"
+const (
+	ClusterRoleFinalizer = "clusterrole.components.eks.amazon.com"
 )
 
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
-
-// Add creates a new Ingress Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
+// Add creates a new ClusterRole Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-// USER ACTION REQUIRED: update cmd/manager/main.go to call this components.Add(mgr) to install this Controller
 func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
 }
@@ -61,7 +53,7 @@ func Add(mgr manager.Manager) error {
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	sess := session.Must(session.NewSession())
 	log := logging.New()
-	return &ReconcileIngress{
+	return &ReconcileClusterRole{
 		Client: mgr.GetClient(),
 		scheme: mgr.GetScheme(),
 		log:    log,
@@ -70,16 +62,27 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	}
 }
 
+// This is for testing.  It will return a reconciler that will use the Client for both local and remote calls.
+func newTestReconciler(mgr manager.Manager) reconcile.Reconciler {
+	return &ReconcileClusterRole{
+		Client: mgr.GetClient(),
+		scheme: mgr.GetScheme(),
+		log:    logging.New(),
+		sess:   session.Must(session.NewSession()),
+		auth:   authorizer.NewFake(mgr.GetClient()),
+	}
+}
+
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
-	c, err := controller.New("ingress-controller", mgr, controller.Options{Reconciler: r})
+	c, err := controller.New("clusterrole-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
 	}
 
-	// Watch for changes to Ingress
-	err = c.Watch(&source.Kind{Type: &componentsv1alpha1.Ingress{}}, &handler.EnqueueRequestForObject{})
+	// Watch for changes to ClusterRole
+	err = c.Watch(&source.Kind{Type: &componentsv1alpha1.ClusterRole{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
@@ -87,10 +90,10 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-var _ reconcile.Reconciler = &ReconcileIngress{}
+var _ reconcile.Reconciler = &ReconcileClusterRole{}
 
-// ReconcileIngress reconciles a Ingress object
-type ReconcileIngress struct {
+// ReconcileClusterRole reconciles a ClusterRole object
+type ReconcileClusterRole struct {
 	client.Client
 	scheme *runtime.Scheme
 	log    *zap.Logger
@@ -98,17 +101,21 @@ type ReconcileIngress struct {
 	auth   authorizer.Authorizer
 }
 
-// Reconcile reads that state of the cluster for a Ingress object and makes changes based on the state read
-// and what is in the Ingress.Spec
-// +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
-func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	// Fetch the Ingress instance
+// Reconcile reads that state of the cluster for a ClusterRole object and makes changes based on the state read
+// and what is in the ClusterRole.Spec
+// Automatically generate RBAC rules to allow the Controller to read and write Deployments
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=clusterroles,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=clusterroles/status,verbs=get;update;patch
+func (r *ReconcileClusterRole) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	log := r.log.With(
 		zap.String("Name", request.Name),
-		zap.String("Namespace", request.Namespace),
-		zap.String("Kind", "ingress.components.eks.amazon.com"),
+		zap.String("Kind", "clusterrole.components.eks.amazon.com"),
 	)
-	instance := &componentsv1alpha1.Ingress{}
+
+	// Fetch the ClusterRole instance
+	instance := &componentsv1alpha1.ClusterRole{}
 	err := r.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -120,7 +127,7 @@ func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Resul
 		return reconcile.Result{}, err
 	}
 
-	remoteKey := types.NamespacedName{Namespace: instance.Spec.Namespace, Name: instance.Spec.Name}
+	remoteKey := types.NamespacedName{Name: instance.Spec.Name}
 
 	cluster := &clusterv1alpha1.EKS{}
 	clusterKey := types.NamespacedName{Name: instance.Spec.Cluster, Namespace: instance.Namespace}
@@ -155,26 +162,35 @@ func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Resul
 		log.Error("could not access remote cluster", zap.Error(err))
 		return reconcile.Result{}, err
 	}
-	log.Info("got client")
 
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
-		if finalizers.HasFinalizer(instance, IngressFinalizer) {
-			log.Info("deleting ingress")
-			found := &extv1beta.Ingress{}
+		if finalizers.HasFinalizer(instance, ClusterRoleFinalizer) {
+			log.Info("deleting clusterrole")
+			found := &rbacv1.ClusterRole{}
 			err := client.Get(context.TODO(), remoteKey, found)
 			if err != nil && errors.IsNotFound(err) {
-				instance.Finalizers = finalizers.RemoveFinalizer(instance, IngressFinalizer)
+				instance.Finalizers = finalizers.RemoveFinalizer(instance, ClusterRoleFinalizer)
+				instance.ObjectMeta.OwnerReferences = []v1.OwnerReference{
+					{
+						APIVersion:         "cluster.eks.amazonaws.com/v1alpha1",
+						Kind:               "EKS",
+						Name:               cluster.ObjectMeta.Name,
+						UID:                cluster.ObjectMeta.UID,
+						Controller:         func(b bool) *bool { return &b }(true),
+						BlockOwnerDeletion: func(b bool) *bool { return &b }(true),
+					},
+				}
 				if err := r.Client.Update(context.TODO(), instance); err != nil {
 					return reconcile.Result{}, err
 				}
 				return reconcile.Result{}, nil
 			} else if err != nil {
-				log.Error("could not get remote ingress", zap.Error(err))
+				log.Error("could not get remote clusterrole", zap.Error(err))
 				return reconcile.Result{}, nil
 			}
 
 			if err := client.Delete(context.TODO(), found); err != nil {
-				log.Error("could not delete remote ingress", zap.Error(err))
+				log.Error("could not delete remote clusterrole", zap.Error(err))
 			}
 			return reconcile.Result{}, nil
 
@@ -182,54 +198,47 @@ func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Resul
 		return reconcile.Result{}, nil
 	}
 
-	rIngress := &extv1beta.Ingress{
+	rClusterRole := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        instance.Spec.Name,
-			Namespace:   instance.Spec.Namespace,
 			Labels:      instance.Labels,
 			Annotations: instance.Annotations,
 		},
-		Spec: instance.Spec.IngressSpec,
+		Rules:           instance.Spec.Rules,
+		AggregationRule: instance.Spec.AggregationRule,
 	}
-	found := &extv1beta.Ingress{}
+
+	found := &rbacv1.ClusterRole{}
 	err = client.Get(context.TODO(), remoteKey, found)
 	if err != nil && errors.IsNotFound(err) {
-		log.Info("creating ingress")
+		log.Info("creating clusterrole")
 
-		if err := client.Create(context.TODO(), rIngress); err != nil {
-			log.Error("failed to create remote ingress", zap.Error(err))
+		if err := client.Create(context.TODO(), rClusterRole); err != nil {
+			log.Error("failed to create remote clusterrole", zap.Error(err))
 			return reconcile.Result{}, err
 		}
-		instance.Finalizers = []string{IngressFinalizer}
+		instance.Finalizers = []string{ClusterRoleFinalizer}
 		instance.Status.Status = "Created"
-
 		if err := r.Client.Update(context.TODO(), instance); err != nil {
-			log.Error("failed to create ingress", zap.Error(err))
+			log.Error("failed to create clusterrole", zap.Error(err))
 			return reconcile.Result{}, err
 		}
-		log.Info("ingress created")
+
 		return reconcile.Result{}, nil
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
+	if !reflect.DeepEqual(found.Rules, instance.Spec.Rules) ||
+		!reflect.DeepEqual(found.AggregationRule, instance.Spec.AggregationRule) {
+		found.Rules = instance.Spec.Rules
+		found.AggregationRule = instance.Spec.AggregationRule
 
-	log.Info("found remote ingress")
-	if !reflect.DeepEqual(found.Spec, rIngress.Spec) {
-		found.Spec = rIngress.Spec
-		log.Info("updating ingress")
+		log.Info("updating clusterrole")
 		err := client.Update(context.TODO(), found)
 		if err != nil {
-			log.Error("failed to update remote ingress", zap.Error(err))
+			log.Error("failed to update remote clusterrole", zap.Error(err))
 			return reconcile.Result{}, err
 		}
-		log.Info("ingress updated")
 	}
-
-	instance.Status.IngressStatus = found.Status
-	if err := r.Client.Update(context.TODO(), instance); err != nil {
-		log.Error("failed to update status of ingress", zap.Error(err))
-		return reconcile.Result{}, err
-	}
-
 	return reconcile.Result{}, nil
 }

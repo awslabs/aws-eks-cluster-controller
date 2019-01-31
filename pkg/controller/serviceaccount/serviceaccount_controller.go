@@ -1,6 +1,3 @@
-// Copyright 2018 Aaron Clawson
-// Copyright 2018 Alex Tanton
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,7 +11,7 @@
 // limitations under the License.
 //
 
-package ingress
+package serviceaccount
 
 import (
 	"context"
@@ -28,7 +25,7 @@ import (
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/finalizers"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
 	"go.uber.org/zap"
-	extv1beta "k8s.io/api/extensions/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,18 +38,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var (
-	IngressFinalizer = "ingress.components.eks.amazon.com"
+const (
+	ServiceAccountFinalizer = "serviceaccount.components.eks.amazon.com"
 )
 
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
-
-// Add creates a new Ingress Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
+// Add creates a new ServiceAccount Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-// USER ACTION REQUIRED: update cmd/manager/main.go to call this components.Add(mgr) to install this Controller
 func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
 }
@@ -61,7 +52,7 @@ func Add(mgr manager.Manager) error {
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	sess := session.Must(session.NewSession())
 	log := logging.New()
-	return &ReconcileIngress{
+	return &ReconcileServiceAccount{
 		Client: mgr.GetClient(),
 		scheme: mgr.GetScheme(),
 		log:    log,
@@ -73,13 +64,13 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
-	c, err := controller.New("ingress-controller", mgr, controller.Options{Reconciler: r})
+	c, err := controller.New("serviceaccount-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
 	}
 
-	// Watch for changes to Ingress
-	err = c.Watch(&source.Kind{Type: &componentsv1alpha1.Ingress{}}, &handler.EnqueueRequestForObject{})
+	// Watch for changes to ServiceAccount
+	err = c.Watch(&source.Kind{Type: &componentsv1alpha1.ServiceAccount{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
@@ -87,10 +78,10 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-var _ reconcile.Reconciler = &ReconcileIngress{}
+var _ reconcile.Reconciler = &ReconcileServiceAccount{}
 
-// ReconcileIngress reconciles a Ingress object
-type ReconcileIngress struct {
+// ReconcileServiceAccount reconciles a ServiceAccount object
+type ReconcileServiceAccount struct {
 	client.Client
 	scheme *runtime.Scheme
 	log    *zap.Logger
@@ -98,17 +89,22 @@ type ReconcileIngress struct {
 	auth   authorizer.Authorizer
 }
 
-// Reconcile reads that state of the cluster for a Ingress object and makes changes based on the state read
-// and what is in the Ingress.Spec
-// +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
-func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	// Fetch the Ingress instance
+// Reconcile reads that state of the cluster for a ServiceAccount object and makes changes based on the state read
+// and what is in the ServiceAccount.Spec
+// Automatically generate RBAC rules to allow the Controller to read and write Deployments
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=serviceaccounts/status,verbs=get;update;patch
+func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	log := r.log.With(
 		zap.String("Name", request.Name),
 		zap.String("Namespace", request.Namespace),
-		zap.String("Kind", "ingress.components.eks.amazon.com"),
+		zap.String("Kind", "serviceaccount.components.eks.amazon.com"),
 	)
-	instance := &componentsv1alpha1.Ingress{}
+
+	// Fetch the ServiceAccount instance
+	instance := &componentsv1alpha1.ServiceAccount{}
 	err := r.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -155,26 +151,25 @@ func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Resul
 		log.Error("could not access remote cluster", zap.Error(err))
 		return reconcile.Result{}, err
 	}
-	log.Info("got client")
 
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
-		if finalizers.HasFinalizer(instance, IngressFinalizer) {
-			log.Info("deleting ingress")
-			found := &extv1beta.Ingress{}
+		if finalizers.HasFinalizer(instance, ServiceAccountFinalizer) {
+			log.Info("deleting serviceaccount")
+			found := &corev1.ServiceAccount{}
 			err := client.Get(context.TODO(), remoteKey, found)
 			if err != nil && errors.IsNotFound(err) {
-				instance.Finalizers = finalizers.RemoveFinalizer(instance, IngressFinalizer)
+				instance.Finalizers = finalizers.RemoveFinalizer(instance, ServiceAccountFinalizer)
 				if err := r.Client.Update(context.TODO(), instance); err != nil {
 					return reconcile.Result{}, err
 				}
 				return reconcile.Result{}, nil
 			} else if err != nil {
-				log.Error("could not get remote ingress", zap.Error(err))
+				log.Error("could not get remote serviceaccount", zap.Error(err))
 				return reconcile.Result{}, nil
 			}
 
 			if err := client.Delete(context.TODO(), found); err != nil {
-				log.Error("could not delete remote ingress", zap.Error(err))
+				log.Error("could not delete remote serviceaccount", zap.Error(err))
 			}
 			return reconcile.Result{}, nil
 
@@ -182,53 +177,51 @@ func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Resul
 		return reconcile.Result{}, nil
 	}
 
-	rIngress := &extv1beta.Ingress{
+	rServiceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        instance.Spec.Name,
 			Namespace:   instance.Spec.Namespace,
-			Labels:      instance.Labels,
-			Annotations: instance.Annotations,
+			Labels:      instance.Spec.Labels,
+			Annotations: instance.Spec.Annotations,
 		},
-		Spec: instance.Spec.IngressSpec,
+		Secrets:                      instance.Spec.Secrets,
+		ImagePullSecrets:             instance.Spec.ImagePullSecrets,
+		AutomountServiceAccountToken: instance.Spec.AutomountServiceAccountToken,
 	}
-	found := &extv1beta.Ingress{}
+
+	found := &corev1.ServiceAccount{}
 	err = client.Get(context.TODO(), remoteKey, found)
 	if err != nil && errors.IsNotFound(err) {
-		log.Info("creating ingress")
+		log.Info("creating serviceaccount")
 
-		if err := client.Create(context.TODO(), rIngress); err != nil {
-			log.Error("failed to create remote ingress", zap.Error(err))
+		if err := client.Create(context.TODO(), rServiceAccount); err != nil {
+			log.Error("failed to create remote serviceaccount", zap.Error(err))
 			return reconcile.Result{}, err
 		}
-		instance.Finalizers = []string{IngressFinalizer}
+		instance.Finalizers = []string{ServiceAccountFinalizer}
 		instance.Status.Status = "Created"
 
 		if err := r.Client.Update(context.TODO(), instance); err != nil {
-			log.Error("failed to create ingress", zap.Error(err))
+			log.Error("failed to create serviceaccount", zap.Error(err))
 			return reconcile.Result{}, err
 		}
-		log.Info("ingress created")
 		return reconcile.Result{}, nil
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	log.Info("found remote ingress")
-	if !reflect.DeepEqual(found.Spec, rIngress.Spec) {
-		found.Spec = rIngress.Spec
-		log.Info("updating ingress")
+	if !reflect.DeepEqual(found.Secrets, instance.Spec.Secrets) ||
+		!reflect.DeepEqual(found.ImagePullSecrets, instance.Spec.ImagePullSecrets) ||
+		!reflect.DeepEqual(found.AutomountServiceAccountToken, instance.Spec.AutomountServiceAccountToken) {
+		found.Secrets = instance.Spec.Secrets
+		found.ImagePullSecrets = instance.Spec.ImagePullSecrets
+		found.AutomountServiceAccountToken = instance.Spec.AutomountServiceAccountToken
+		log.Info("updating serviceaccount")
 		err := client.Update(context.TODO(), found)
 		if err != nil {
-			log.Error("failed to update remote ingress", zap.Error(err))
+			log.Error("failed to update remote serviceaccount", zap.Error(err))
 			return reconcile.Result{}, err
 		}
-		log.Info("ingress updated")
-	}
-
-	instance.Status.IngressStatus = found.Status
-	if err := r.Client.Update(context.TODO(), instance); err != nil {
-		log.Error("failed to update status of ingress", zap.Error(err))
-		return reconcile.Result{}, err
 	}
 
 	return reconcile.Result{}, nil
