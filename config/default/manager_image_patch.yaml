@@ -7,9 +7,9 @@ spec:
   template:
     metadata:
       annotations:
-        iam.amazonaws.com/role: arn:aws:iam::383897477046:role/aws-eks-cluster-controller
+        iam.amazonaws.com/role: ROLEARN
     spec:
       containers:
       # Change the value of image field below to your controller image URL
-      - image: 383897477046.dkr.ecr.us-west-2.amazonaws.com/aws-eks-cluster-controller:latest
+      - image: IMAGE
         name: manager
