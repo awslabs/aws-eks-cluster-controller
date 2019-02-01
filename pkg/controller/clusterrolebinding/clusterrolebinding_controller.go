@@ -160,7 +160,7 @@ func (r *ReconcileClusterRoleBinding) Reconcile(request reconcile.Request) (reco
 	client, err := r.auth.GetClient(cluster)
 	if err != nil {
 		log.Error("could not access remote cluster", zap.Error(err))
-		return reconcile.Result{}, err
+		return reconcile.Result{RequeueAfter: 30 * time.Second}, err
 	}
 
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {

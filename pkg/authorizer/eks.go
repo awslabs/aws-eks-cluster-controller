@@ -6,8 +6,6 @@ import (
 	"text/template"
 
 	"github.com/aws/aws-sdk-go/service/eks/eksiface"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/eks"
@@ -53,30 +51,7 @@ func (e *EKSAuthorizer) GetClient(eksCluster *clusterv1alpha1.EKS) (client.Clien
 		return nil, err
 	}
 
-	return e.GetClientFromConfig(kconfig)
-}
-
-func (e *EKSAuthorizer) GetClientFromConfig(config []byte) (client.Client, error) {
-	// Add our custom resources to the client
-	s := scheme.Scheme
-
-	cc, err := clientcmd.NewClientConfigFromBytes(config)
-	if err != nil {
-		e.log.Error("failed to build the client config", zap.Error(err))
-		return nil, err
-	}
-	restConfig, err := cc.ClientConfig()
-	if err != nil {
-		e.log.Error("failed to build the rest config", zap.Error(err))
-		return nil, err
-	}
-	kClient, err := client.New(restConfig, client.Options{Scheme: s})
-	if err != nil {
-		e.log.Error("failed to build the kubernetes client", zap.Error(err))
-		return nil, err
-	}
-
-	return kClient, nil
+	return GetClientFromConfig(kconfig)
 }
 
 var _ Authorizer = &EKSAuthorizer{}
