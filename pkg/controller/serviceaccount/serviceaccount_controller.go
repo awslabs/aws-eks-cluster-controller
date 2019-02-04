@@ -149,7 +149,7 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	client, err := r.auth.GetClient(cluster)
 	if err != nil {
 		log.Error("could not access remote cluster", zap.Error(err))
-		return reconcile.Result{RequeueAfter: 30 * time.Second}, err
+		return reconcile.Result{}, err
 	}
 
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
