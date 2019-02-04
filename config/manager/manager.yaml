@@ -55,11 +55,11 @@ spec:
             value: $(WEBHOOK_SECRET_NAME)
         resources:
           limits:
-            cpu: 100m
-            memory: 30Mi
+            cpu: 1000m
+            memory: 1024Mi
           requests:
-            cpu: 100m
-            memory: 20Mi
+            cpu: 500m
+            memory: 512Mi
         ports:
         - containerPort: 9876
           name: webhook-server
