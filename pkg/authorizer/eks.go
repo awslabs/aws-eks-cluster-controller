@@ -50,6 +50,7 @@ func (e *EKSAuthorizer) GetClient(eksCluster *clusterv1alpha1.EKS) (client.Clien
 		e.log.Error("failed to build kubconfig", zap.Error(err))
 		return nil, err
 	}
+
 	return GetClientFromConfig(kconfig)
 }
 

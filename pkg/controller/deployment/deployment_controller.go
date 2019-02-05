@@ -148,13 +148,28 @@ func (r *ReconcileDeployment) Reconcile(request reconcile.Request) (reconcile.Re
 	}
 	log.Info("got cluster", zap.String("ClusterName", cluster.Name))
 
+	if len(instance.ObjectMeta.OwnerReferences) < 1 {
+		// Add Owner Reference
+		instance.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+			{
+				APIVersion: "cluster.eks.amazonaws.com/v1alpha1",
+				Kind:       "EKS",
+				Name:       cluster.ObjectMeta.Name,
+				UID:        cluster.ObjectMeta.UID,
+			},
+		}
+		if err := r.Client.Update(context.TODO(), instance); err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
 	client, err := r.auth.GetClient(cluster)
 	if err != nil {
 		log.Error("could not access remote cluster", zap.Error(err))
 		return reconcile.Result{}, err
 	}
-	log.Info("got client")
 
+	log.Info("got client")
 	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
 		if finalizers.HasFinalizer(instance, DeploymentFinalizer) {
 			log.Info("deleting deployment")
@@ -199,6 +214,7 @@ func (r *ReconcileDeployment) Reconcile(request reconcile.Request) (reconcile.Re
 			return reconcile.Result{}, err
 		}
 		instance.Finalizers = []string{DeploymentFinalizer}
+
 		if err := r.Client.Update(context.TODO(), instance); err != nil {
 			log.Error("failed to create deployment", zap.Error(err))
 			return reconcile.Result{}, err

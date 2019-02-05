@@ -139,6 +139,21 @@ func (r *ReconcileClusterRole) Reconcile(request reconcile.Request) (reconcile.R
 	}
 	log.Info("got cluster", zap.String("ClusterName", cluster.Name))
 
+	if len(instance.ObjectMeta.OwnerReferences) < 1 {
+		// Add Owner Reference
+		instance.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+			{
+				APIVersion: "cluster.eks.amazonaws.com/v1alpha1",
+				Kind:       "EKS",
+				Name:       cluster.ObjectMeta.Name,
+				UID:        cluster.ObjectMeta.UID,
+			},
+		}
+		if err := r.Client.Update(context.TODO(), instance); err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
 	client, err := r.auth.GetClient(cluster)
 	if err != nil {
 		log.Error("could not access remote cluster", zap.Error(err))
