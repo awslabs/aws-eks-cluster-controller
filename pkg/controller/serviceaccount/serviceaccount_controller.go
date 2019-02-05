@@ -133,12 +133,10 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		// Add Owner Reference
 		instance.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
 			{
-				APIVersion:         "cluster.eks.amazonaws.com/v1alpha1",
-				Kind:               "EKS",
-				Name:               cluster.ObjectMeta.Name,
-				UID:                cluster.ObjectMeta.UID,
-				Controller:         func(b bool) *bool { return &b }(true),
-				BlockOwnerDeletion: func(b bool) *bool { return &b }(true),
+				APIVersion: "cluster.eks.amazonaws.com/v1alpha1",
+				Kind:       "EKS",
+				Name:       cluster.ObjectMeta.Name,
+				UID:        cluster.ObjectMeta.UID,
 			},
 		}
 		if err := r.Client.Update(context.TODO(), instance); err != nil {
