@@ -27,7 +27,8 @@ Make sure you have following tools installed on your workstation:
 -- or on MacOS via brew --
 
 ```sh
-brew install kustomize kubernetes-cli eksctl awscli weaveworks/tap/eksctl jq
+brew tap weaveworks/tap/eksctl
+brew install kustomize kubernetes-cli eksctl awscli jq
 go get -u -v github.com/kubernetes-sigs/aws-iam-authenticator/cmd/aws-iam-authenticator
 ```
 And [install kubebuilder](https://book.kubebuilder.io/getting_started/installation_and_setup.html)
