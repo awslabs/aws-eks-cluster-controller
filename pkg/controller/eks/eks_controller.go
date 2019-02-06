@@ -316,13 +316,13 @@ func (r *ReconcileEKS) createControlPlane(instance *clusterv1alpha1.EKS) (string
 			Labels:      labels,
 			Annotations: instance.Annotations,
 		},
-		Spec: clusterv1alpha1.ControlPlaneSpec{
-			ClusterName: instance.Spec.ControlPlane.ClusterName,
-		},
+		Spec: instance.Spec.ControlPlane,
 	}
+
 	if err := controllerutil.SetControllerReference(instance, cp, r.scheme); err != nil {
 		return "", err
 	}
+
 	logger := r.log.With(
 		zap.String("Kind", "EKS"),
 		zap.String("Name", instance.Name),

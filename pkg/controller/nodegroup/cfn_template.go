@@ -3,7 +3,7 @@ package nodegroup
 var nodeGroupCFNTemplate = `
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Amazon EKS - Node Group - [managed by aws-eks-cluster-operator]'
+Description: 'Amazon EKS - Node Group - [managed by aws-eks-cluster-controller]'
 
 Parameters:
 
