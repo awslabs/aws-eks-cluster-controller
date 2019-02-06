@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -132,19 +133,8 @@ func (r *ReconcileConfigMap) Reconcile(request reconcile.Request) (reconcile.Res
 	}
 	log.Info("got cluster", zap.String("ClusterName", cluster.Name))
 
-	if len(instance.ObjectMeta.OwnerReferences) < 1 {
-		// Add Owner Reference
-		instance.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-			{
-				APIVersion: "cluster.eks.amazonaws.com/v1alpha1",
-				Kind:       "EKS",
-				Name:       cluster.ObjectMeta.Name,
-				UID:        cluster.ObjectMeta.UID,
-			},
-		}
-		if err := r.Client.Update(context.TODO(), instance); err != nil {
-			return reconcile.Result{}, err
-		}
+	if err := controllerutil.SetControllerReference(cluster, instance, r.scheme); err != nil {
+		return reconcile.Result{}, nil
 	}
 
 	client, err := r.auth.GetClient(cluster)
