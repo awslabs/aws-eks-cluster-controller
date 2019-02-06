@@ -18,6 +18,8 @@ import (
 	"reflect"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
 	"github.com/aws/aws-sdk-go/aws/session"
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
@@ -139,19 +141,8 @@ func (r *ReconcileClusterRole) Reconcile(request reconcile.Request) (reconcile.R
 	}
 	log.Info("got cluster", zap.String("ClusterName", cluster.Name))
 
-	if len(instance.ObjectMeta.OwnerReferences) < 1 {
-		// Add Owner Reference
-		instance.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-			{
-				APIVersion: "cluster.eks.amazonaws.com/v1alpha1",
-				Kind:       "EKS",
-				Name:       cluster.ObjectMeta.Name,
-				UID:        cluster.ObjectMeta.UID,
-			},
-		}
-		if err := r.Client.Update(context.TODO(), instance); err != nil {
-			return reconcile.Result{}, err
-		}
+	if err := controllerutil.SetControllerReference(cluster, instance, r.scheme); err != nil {
+		return reconcile.Result{}, nil
 	}
 
 	client, err := r.auth.GetClient(cluster)

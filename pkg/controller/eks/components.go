@@ -17,6 +17,9 @@ var componentsToDelete = []runtime.Object{
 	&componentsv1alpha1.IngressList{},
 	&componentsv1alpha1.SecretList{},
 	&componentsv1alpha1.ServiceList{},
+	&componentsv1alpha1.ServiceAccountList{},
+	&componentsv1alpha1.ClusterRoleList{},
+	&componentsv1alpha1.ClusterRoleBindingList{},
 }
 
 func deleteComponents(ownerName, ownerNamespace string, c client.Client, logger *zap.Logger) (int, error) {
