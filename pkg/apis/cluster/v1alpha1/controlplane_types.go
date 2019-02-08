@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	"fmt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -14,6 +15,8 @@ type ControlPlaneSpec struct {
 	ClusterName string `json:"clusterName"`
 	// +optional
 	Version *string `json:"version,omitempty"`
+	// +optional
+	Network *Network `json:"network,omitempty"`
 }
 
 // ControlPlaneStatus defines the observed state of ControlPlane
@@ -51,9 +54,24 @@ func init() {
 	SchemeBuilder.Register(&ControlPlane{}, &ControlPlaneList{})
 }
 
+// GetVersion returns the Version of the EKS cluster
 func (cp *ControlPlane) GetVersion() string {
 	if isSupportedVersion(cp.Spec.Version) {
 		return *cp.Spec.Version
 	}
 	return DefaultVersion
+}
+
+// GetNetwork returns validated Network information specified in Spec
+func (cp *ControlPlane) GetNetwork() (Network, error) {
+	if cp.Spec.Network == nil {
+		return DefaultNetwork, nil
+	}
+
+	err := validateNetwork(*cp.Spec.Network)
+	if err != nil {
+		return Network{}, fmt.Errorf("invalid network: %s", err)
+	}
+
+	return *cp.Spec.Network, nil
 }

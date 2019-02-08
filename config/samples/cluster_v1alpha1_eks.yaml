@@ -10,6 +10,12 @@ spec:
   region: "us-test-1"         # region where child EKS cluster need to be created
   controlPlane:
     clusterName: "eks-sample"
+    network:
+      vpcCidr: 172.16.0.0/16
+      subnetCidrs:
+        - 172.16.0.0/24
+        - 172.16.1.0/24
+        - 172.16.2.0/24
   nodeGroups:
     - name: "g1"
       iamPolicies: 

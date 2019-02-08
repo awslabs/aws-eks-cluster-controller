@@ -24,6 +24,20 @@ spec:
           properties:
             clusterName:
               type: string
+            network:
+              properties:
+                subnetCidrs:
+                  items:
+                    type: string
+                  maxItems: 3
+                  minItems: 3
+                  type: array
+                vpcCidr:
+                  type: string
+              required:
+              - vpcCidr
+              - subnetCidrs
+              type: object
             version:
               type: string
           required:

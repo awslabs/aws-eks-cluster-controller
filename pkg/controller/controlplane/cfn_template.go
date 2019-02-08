@@ -3,35 +3,13 @@ package controlplane
 var controlplaneCFNTemplate = `
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Amazon EKS Networking + Control Plane [managed by aws-eks-cluster-operator]'
-
-Parameters:
-
-  VpcBlock:
-    Type: String
-    Default: 192.168.0.0/16
-    Description: The CIDR range for the VPC. This should be a valid private (RFC 1918) CIDR range.
-
-  Subnet01Block:
-    Type: String
-    Default: 192.168.64.0/18
-    Description: CidrBlock for subnet 01 within the VPC
-
-  Subnet02Block:
-    Type: String
-    Default: 192.168.128.0/18
-    Description: CidrBlock for subnet 02 within the VPC
-
-  Subnet03Block:
-    Type: String
-    Default: 192.168.192.0/18
-    Description: CidrBlock for subnet 03 within the VPC
+Description: 'Amazon EKS Networking + Control Plane [managed by aws-eks-cluster-controller]'
 
 Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock:  !Ref VpcBlock
+      CidrBlock: {{ .Network.VpcCidr }}
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
@@ -75,8 +53,7 @@ Resources:
         - '0'
         - Fn::GetAZs:
             Ref: AWS::Region
-      CidrBlock:
-        Ref: Subnet01Block
+      CidrBlock: {{ index .Network.SubnetCidrs 0 }}
       VpcId:
         Ref: VPC
       Tags:
@@ -93,8 +70,7 @@ Resources:
         - '1'
         - Fn::GetAZs:
             Ref: AWS::Region
-      CidrBlock:
-        Ref: Subnet02Block
+      CidrBlock: {{ index .Network.SubnetCidrs 1 }}
       VpcId:
         Ref: VPC
       Tags:
@@ -111,8 +87,7 @@ Resources:
         - '2'
         - Fn::GetAZs:
             Ref: AWS::Region
-      CidrBlock:
-        Ref: Subnet03Block
+      CidrBlock: {{ index .Network.SubnetCidrs 2 }}
       VpcId:
         Ref: VPC
       Tags:

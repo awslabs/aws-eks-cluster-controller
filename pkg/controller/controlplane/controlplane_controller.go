@@ -247,11 +247,26 @@ func (r *ReconcileControlPlane) fail(instance *clusterv1alpha1.ControlPlane, msg
 	r.Update(context.TODO(), instance)
 }
 
+type controlPlaneTemplateInput struct {
+	ClusterName string
+	Version     string
+	Network     clusterv1alpha1.Network
+}
+
 func (r *ReconcileControlPlane) createControlPlaneStack(cfnSvc cloudformationiface.CloudFormationAPI, stackName string, instance *clusterv1alpha1.ControlPlane) error {
-	body, err := cfnhelper.GetCFNTemplateBody(controlplaneCFNTemplate, map[string]string{
-		"ClusterName": instance.Spec.ClusterName,
-		"Version":     instance.GetVersion(),
+	network, err := instance.GetNetwork()
+	if err != nil {
+		return err
+	}
+
+	body, err := cfnhelper.GetCFNTemplateBody(controlplaneCFNTemplate, controlPlaneTemplateInput{
+		ClusterName: instance.Spec.ClusterName,
+		Version:     instance.GetVersion(),
+		Network:     network,
 	})
+	if err != nil {
+		return err
+	}
 
 	_, err = cfnSvc.CreateStack(&cloudformation.CreateStackInput{
 		TemplateBody: aws.String(body),
