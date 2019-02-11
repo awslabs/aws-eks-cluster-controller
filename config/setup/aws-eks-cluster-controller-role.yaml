@@ -49,3 +49,7 @@ Resources:
                 }
               ]
             }
+Outputs:
+  ControllerRole:
+    Description: The role the eks-cluster-controller will assume for cross account actions
+    Value: !GetAtt AWSServiceControllerRole.Arn

@@ -2,95 +2,63 @@ package eks
 
 import (
 	"context"
-	"fmt"
 
-	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	crdv1b1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
-var componentsToDelete = []runtime.Object{
-	&componentsv1alpha1.ConfigMapList{},
-	&componentsv1alpha1.DeploymentList{},
-	&componentsv1alpha1.IngressList{},
-	&componentsv1alpha1.SecretList{},
-	&componentsv1alpha1.ServiceList{},
-	&componentsv1alpha1.ServiceAccountList{},
-	&componentsv1alpha1.ClusterRoleList{},
-	&componentsv1alpha1.ClusterRoleBindingList{},
-}
+func deleteComponents(ownerName, ownerNamespace string, c client.Client, logger *zap.Logger) (count int, err error) {
 
-func deleteComponents(ownerName, ownerNamespace string, c client.Client, logger *zap.Logger) (int, error) {
+	listOptions := client.MatchingLabels(map[string]string{
+		"eks.owner.name":      ownerName,
+		"eks.owner.namespace": ownerNamespace,
+		"eks.needsdeleting":   "true",
+	})
 
-	delete := []runtime.Object{}
-	for _, componentList := range componentsToDelete {
-		list := componentList.DeepCopyObject()
-		err := c.List(context.TODO(), client.MatchingLabels(map[string]string{
-			"eks.owner.name":      ownerName,
-			"eks.owner.namespace": ownerNamespace,
-			"eks.needsdeleting":   "true",
-		}), list)
-		if err != nil {
-			return 0, nil
+	crds := &crdv1b1.CustomResourceDefinitionList{}
+	err = c.List(context.TODO(), &client.ListOptions{}, crds)
+	if err != nil {
+		logger.Error("error getting crds", zap.Error(err))
+		return count, err
+	}
+	gvks := []schema.GroupVersionKind{}
+	for _, crd := range crds.Items {
+
+		version := crd.Spec.Version
+		if len(crd.Spec.Versions) > 0 {
+			version = crd.Spec.Versions[0].Name
 		}
-		switch l := list.(type) {
-		case *componentsv1alpha1.ConfigMapList:
-			for _, obj := range l.Items {
-				item := obj
-				delete = append(delete, &item)
-			}
-		case *componentsv1alpha1.DeploymentList:
-			for _, obj := range l.Items {
-				item := obj
-				delete = append(delete, &item)
-			}
-		case *componentsv1alpha1.IngressList:
-			for _, obj := range l.Items {
-				item := obj
-				delete = append(delete, &item)
-			}
-		case *componentsv1alpha1.SecretList:
-			for _, obj := range l.Items {
-				item := obj
-				delete = append(delete, &item)
-			}
-		case *componentsv1alpha1.ServiceList:
-			for _, obj := range l.Items {
-				item := obj
-				delete = append(delete, &item)
-			}
-		case *componentsv1alpha1.ClusterRoleList:
-			for _, obj := range l.Items {
-				item := obj
-				delete = append(delete, &item)
-			}
-		case *componentsv1alpha1.ClusterRoleBindingList:
-			for _, obj := range l.Items {
-				item := obj
-				delete = append(delete, &item)
-			}
-		case *componentsv1alpha1.ServiceAccountList:
-			for _, obj := range l.Items {
-				item := obj
-				delete = append(delete, &item)
-			}
-		default:
-			logger.Error("Got object type we didn't understand", zap.Any("object", l))
-			return 0, fmt.Errorf("unknown type error")
+		if crd.Spec.Group == "components.eks.amazonaws.com" {
+			gvks = append(gvks, schema.GroupVersionKind{
+				Group:   crd.Spec.Group,
+				Version: version,
+				Kind:    crd.Spec.Names.ListKind,
+			})
 		}
-
 	}
 
-	errs := []error{}
-	for _, obj := range delete {
-		err := c.Delete(context.TODO(), obj)
-		errs = append(errs, err)
-	}
-	if len(errs) > 0 {
-		return len(delete), fmt.Errorf("error deleting objects %v", errs)
-	}
+	for _, gvk := range gvks {
+		list := &unstructured.UnstructuredList{}
+		list.SetGroupVersionKind(gvk)
 
-	return len(delete), nil
+		c.List(context.TODO(), listOptions, list)
+
+		if len(list.Items) > 0 {
+			for _, item := range list.Items {
+				count++
+				err = c.Delete(context.TODO(), &item)
+				if err != nil {
+					logger.Error("error deleting resource", zap.String("resource", gvk.String()), zap.Error(err))
+					return count, err
+				}
+			}
+		}
+	}
+	return count, nil
 }
