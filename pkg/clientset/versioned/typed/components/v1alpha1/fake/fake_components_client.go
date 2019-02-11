@@ -60,6 +60,10 @@ func (c *FakeComponentsV1alpha1) ServiceAccounts(namespace string) v1alpha1.Serv
 	return &FakeServiceAccounts{c, namespace}
 }
 
+func (c *FakeComponentsV1alpha1) StatefulSets(namespace string) v1alpha1.StatefulSetInterface {
+	return &FakeStatefulSets{c, namespace}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeComponentsV1alpha1) RESTClient() rest.Interface {

@@ -33,3 +33,5 @@ type SecretExpansion interface{}
 type ServiceExpansion interface{}
 
 type ServiceAccountExpansion interface{}
+
+type StatefulSetExpansion interface{}
