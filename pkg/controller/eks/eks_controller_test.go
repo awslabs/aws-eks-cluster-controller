@@ -144,9 +144,10 @@ func TestReconcile(t *testing.T) {
 		for range requests {
 		}
 	}()
-	g.Eventually(func() error { return c.Get(context.TODO(), configmapKey, configmap) }).ShouldNot(gomega.Succeed())
-	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup1Key, nodeGroup1) }).ShouldNot(gomega.Succeed())
-	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup2Key, nodeGroup2) }).ShouldNot(gomega.Succeed())
+
+	g.Eventually(func() error { return c.Get(context.TODO(), configmapKey, configmap) }, timeout).ShouldNot(gomega.Succeed())
+	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup1Key, nodeGroup1) }, timeout).ShouldNot(gomega.Succeed())
+	g.Eventually(func() error { return c.Get(context.TODO(), nodeGroup2Key, nodeGroup2) }, timeout).ShouldNot(gomega.Succeed())
 	g.Eventually(func() error { return c.Get(context.TODO(), controlPlaneKey, controlPlane) }, timeout).ShouldNot(gomega.Succeed())
 
 	g.Eventually(func() error {
@@ -156,6 +157,6 @@ func TestReconcile(t *testing.T) {
 		return c.Get(context.TODO(), types.NamespacedName{Name: "secret2-foo", Namespace: "default"}, &componentsv1alpha1.Secret{})
 	}, timeout).ShouldNot(gomega.Succeed())
 
-	g.Eventually(func() error { return c.Get(context.TODO(), eksKey, instance) }).ShouldNot(gomega.Succeed())
+	g.Eventually(func() error { return c.Get(context.TODO(), eksKey, instance) }, timeout).ShouldNot(gomega.Succeed())
 
 }

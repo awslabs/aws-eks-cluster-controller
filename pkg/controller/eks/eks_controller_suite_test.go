@@ -14,6 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	crdv1b1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 )
 
 var cfg *rest.Config
@@ -22,6 +24,8 @@ func TestMain(m *testing.M) {
 	t := &envtest.Environment{
 		CRDDirectoryPaths: []string{filepath.Join("..", "..", "..", "config", "crds")},
 	}
+
+	crdv1b1.AddToScheme(scheme.Scheme)
 	apis.AddToScheme(scheme.Scheme)
 
 	var err error
