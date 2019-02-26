@@ -30,6 +30,7 @@ type ComponentsV1alpha1Interface interface {
 	ClusterRolesGetter
 	ClusterRoleBindingsGetter
 	ConfigMapsGetter
+	DaemonSetsGetter
 	DeploymentsGetter
 	IngressesGetter
 	SecretsGetter
@@ -52,6 +53,10 @@ func (c *ComponentsV1alpha1Client) ClusterRoleBindings(namespace string) Cluster
 
 func (c *ComponentsV1alpha1Client) ConfigMaps(namespace string) ConfigMapInterface {
 	return newConfigMaps(c, namespace)
+}
+
+func (c *ComponentsV1alpha1Client) DaemonSets(namespace string) DaemonSetInterface {
+	return newDaemonSets(c, namespace)
 }
 
 func (c *ComponentsV1alpha1Client) Deployments(namespace string) DeploymentInterface {
