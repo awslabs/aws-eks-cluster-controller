@@ -6,12 +6,17 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes/scheme"
 
 	crdv1b1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+func init() {
+	crdv1b1.AddToScheme(scheme.Scheme)
+}
 
 func deleteComponents(ownerName, ownerNamespace string, c client.Client, logger *zap.Logger) (count int, err error) {
 
