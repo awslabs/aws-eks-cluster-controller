@@ -40,6 +40,10 @@ func (c *FakeComponentsV1alpha1) ConfigMaps(namespace string) v1alpha1.ConfigMap
 	return &FakeConfigMaps{c, namespace}
 }
 
+func (c *FakeComponentsV1alpha1) DaemonSets(namespace string) v1alpha1.DaemonSetInterface {
+	return &FakeDaemonSets{c, namespace}
+}
+
 func (c *FakeComponentsV1alpha1) Deployments(namespace string) v1alpha1.DeploymentInterface {
 	return &FakeDeployments{c, namespace}
 }

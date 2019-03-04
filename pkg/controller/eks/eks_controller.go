@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/client-go/dynamic"
+
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
@@ -41,7 +43,16 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileEKS{Client: mgr.GetClient(), scheme: mgr.GetScheme(), log: logging.New()}
+	dclient, err := dynamic.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		logging.New().Panic("error getting dynamic client", zap.Error(err))
+	}
+	return &ReconcileEKS{
+		Client:  mgr.GetClient(),
+		scheme:  mgr.GetScheme(),
+		log:     logging.New(),
+		dclient: dclient,
+	}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -100,8 +111,9 @@ var (
 // ReconcileEKS reconciles a EKS object
 type ReconcileEKS struct {
 	client.Client
-	scheme *runtime.Scheme
-	log    *zap.Logger
+	dclient dynamic.Interface
+	scheme  *runtime.Scheme
+	log     *zap.Logger
 }
 
 // Reconcile reads that state of the cluster for a EKS object and makes changes based on the state read
@@ -474,6 +486,7 @@ func (r *ReconcileEKS) deleteComponents(instance *clusterv1alpha1.EKS, logger *z
 	}
 
 	count, err := deleteComponents(instance.Name, instance.Namespace, r, logger)
+
 	if err != nil {
 		logger.Error("error deleting components", zap.Error(err))
 		return reconcile.Result{}, err

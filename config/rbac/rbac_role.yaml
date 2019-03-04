@@ -123,6 +123,18 @@ rules:
 - apiGroups:
   - components.eks.amazonaws.com
   resources:
+  - daemonsets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - components.eks.amazonaws.com
+  resources:
   - deployments
   verbs:
   - get

@@ -24,6 +24,8 @@ type ClusterRoleBindingExpansion interface{}
 
 type ConfigMapExpansion interface{}
 
+type DaemonSetExpansion interface{}
+
 type DeploymentExpansion interface{}
 
 type IngressExpansion interface{}
