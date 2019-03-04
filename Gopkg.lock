@@ -716,7 +716,6 @@
   name = "k8s.io/client-go"
   packages = [
     "discovery",
-    "discovery/fake",
     "dynamic",
     "kubernetes",
     "kubernetes/scheme",
