@@ -28,6 +28,8 @@ deploy: manifests
 # Generate manifests e.g. CRD, RBAC etc.
 manifests:
 	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
+	# EKS doesn't allow pods to use the system:default SA, so replace with the default of the namespace
+	sed -i'' -e 's/namespace: system/namespace: aws-eks-cluster-controller-system/' config/rbac/rbac_role_binding.yaml
 
 # Run go fmt against code
 fmt:
