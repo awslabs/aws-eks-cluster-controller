@@ -24,6 +24,8 @@ type ClusterRoleBindingExpansion interface{}
 
 type ConfigMapExpansion interface{}
 
+type CustomResourceDefinitionExpansion interface{}
+
 type DeploymentExpansion interface{}
 
 type IngressExpansion interface{}
