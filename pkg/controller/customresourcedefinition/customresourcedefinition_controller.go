@@ -16,25 +16,39 @@ package customresourcedefinition
 import (
 	"context"
 	"reflect"
+	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/finalizers"
+
+	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/authorizer"
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
+	"go.uber.org/zap"
+
+	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	componentsv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/components/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
+	apiextv1beta "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var log = logf.Log.WithName("controller")
+// statuses and finalizers
+var (
+	CRDFinalizer        = "crd.components.eks.amazon.com"
+	RemoteObjectCreated = "Created"
+)
 
 /**
 * USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
@@ -49,7 +63,15 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileCustomResourceDefinition{Client: mgr.GetClient(), scheme: mgr.GetScheme()}
+	sess := session.Must(session.NewSession())
+	log := logging.New()
+	return &ReconcileCustomResourceDefinition{
+		Client: mgr.GetClient(),
+		scheme: mgr.GetScheme(),
+		log:    log,
+		sess:   sess,
+		auth:   authorizer.NewEks(sess, log),
+	}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -85,6 +107,9 @@ var _ reconcile.Reconciler = &ReconcileCustomResourceDefinition{}
 type ReconcileCustomResourceDefinition struct {
 	client.Client
 	scheme *runtime.Scheme
+	log    *zap.Logger
+	sess   *session.Session
+	auth   authorizer.Authorizer
 }
 
 // Reconcile reads that state of the cluster for a CustomResourceDefinition object and makes changes based on the state read
@@ -97,6 +122,11 @@ type ReconcileCustomResourceDefinition struct {
 // +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=customresourcedefinitions,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=customresourcedefinitions/status,verbs=get;update;patch
 func (r *ReconcileCustomResourceDefinition) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	log := r.log.With(
+		zap.String("Name", request.Name),
+		zap.String("Namespace", request.Namespace),
+		zap.String("Kind", "customresourcedefinitions.components.eks.amazonaws.com"),
+	)
 	// Fetch the CustomResourceDefinition instance
 	instance := &componentsv1alpha1.CustomResourceDefinition{}
 	err := r.Get(context.TODO(), request.NamespacedName, instance)
@@ -110,55 +140,100 @@ func (r *ReconcileCustomResourceDefinition) Reconcile(request reconcile.Request)
 		return reconcile.Result{}, err
 	}
 
-	// TODO(user): Change this to be the object type created by your controller
-	// Define the desired Deployment object
-	deploy := &appsv1.Deployment{
+	remoteKey := types.NamespacedName{Namespace: instance.Spec.Namespace, Name: instance.Spec.Name}
+
+	cluster := &clusterv1alpha1.EKS{}
+	clusterKey := types.NamespacedName{Name: instance.Spec.Cluster, Namespace: instance.Namespace}
+	if err := r.Get(context.TODO(), clusterKey, cluster); err != nil {
+		instance.Finalizers = []string{}
+		instance.Status.Status = "EKS Cluster not found"
+		log.Error("EKS cluster not found", zap.Error(err))
+		r.Update(context.TODO(), instance)
+		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+	}
+	log.Info("got cluster", zap.String("ClusterName", cluster.Name))
+
+	if err := controllerutil.SetControllerReference(cluster, instance, r.scheme); err != nil {
+		return reconcile.Result{}, nil
+	}
+
+	client, err := r.auth.GetClient(cluster)
+	if err != nil {
+		log.Error("could not access remote cluster", zap.Error(err))
+		return reconcile.Result{}, err
+	}
+
+	log.Info("got the remote client")
+
+	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		if finalizers.HasFinalizer(instance, CRDFinalizer) {
+			log.Info("deleting crds")
+			crdFound := &apiextv1beta.CustomResourceDefinition{}
+			err := client.Get(context.TODO(), remoteKey, crdFound)
+			if err != nil && errors.IsNotFound(err) {
+				instance.Finalizers = finalizers.RemoveFinalizer(instance, CRDFinalizer)
+				if err := r.Client.Update(context.TODO(), instance); err != nil {
+					return reconcile.Result{}, err
+				}
+				return reconcile.Result{}, nil
+			} else if err != nil {
+				log.Error("could not get remote ingress", zap.Error(err))
+				return reconcile.Result{}, nil
+			}
+
+			if err := client.Delete(context.TODO(), crdFound); err != nil {
+				log.Error("could not delete remote ingress", zap.Error(err))
+				return reconcile.Result{}, err
+			}
+			return reconcile.Result{}, nil
+		}
+		return reconcile.Result{}, nil
+	}
+
+	crdExpected := &apiextv1beta.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      instance.Name + "-deployment",
-			Namespace: instance.Namespace,
+			Name:        instance.Spec.Name,
+			Namespace:   instance.Spec.Namespace,
+			Labels:      instance.Labels,
+			Annotations: instance.Annotations,
 		},
-		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"deployment": instance.Name + "-deployment"},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"deployment": instance.Name + "-deployment"}},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "nginx",
-							Image: "nginx",
-						},
-					},
-				},
-			},
-		},
+		Spec: instance.Spec.CustomResourceDefinitionSpec,
 	}
-	if err := controllerutil.SetControllerReference(instance, deploy, r.scheme); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// TODO(user): Change this for the object type created by your controller
-	// Check if the Deployment already exists
-	found := &appsv1.Deployment{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, found)
+	crdFound := &apiextv1beta.CustomResourceDefinition{}
+	err = client.Get(context.TODO(), remoteKey, crdFound)
 	if err != nil && errors.IsNotFound(err) {
-		log.Info("Creating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
-		err = r.Create(context.TODO(), deploy)
-		return reconcile.Result{}, err
-	} else if err != nil {
-		return reconcile.Result{}, err
-	}
+		log.Info("creating CRD")
 
-	// TODO(user): Change this for the object type created by your controller
-	// Update the found object and write the result back if there are any changes
-	if !reflect.DeepEqual(deploy.Spec, found.Spec) {
-		found.Spec = deploy.Spec
-		log.Info("Updating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
-		err = r.Update(context.TODO(), found)
-		if err != nil {
+		if err := client.Create(context.TODO(), crdExpected); err != nil {
+			log.Error("failed to create the remote CRD", zap.Error(err))
 			return reconcile.Result{}, err
 		}
+		instance.Finalizers = []string{CRDFinalizer}
+		instance.Status.Status = RemoteObjectCreated
+
+		if err = r.Client.Update(context.TODO(), instance); err != nil {
+			log.Error("failed to update the crd's status", zap.Error(err))
+			return reconcile.Result{}, err
+		}
+
+		log.Info("successfully created the remote crd")
+		return reconcile.Result{}, nil
+	} else if err != nil {
+		log.Error("error retrieving the remote crd")
+		return reconcile.Result{}, err
 	}
+
+	log.Info("found the remote crd")
+	if !reflect.DeepEqual(crdFound.Spec, crdExpected.Spec) {
+		crdFound.Spec = crdExpected.Spec
+		log.Info("updating remote crd")
+		err := client.Update(context.TODO(), crdFound)
+		if err != nil {
+			log.Error("unable to update remote crd", zap.Error(err))
+			return reconcile.Result{}, err
+		}
+		log.Info("remote crd updated")
+	}
+
 	return reconcile.Result{}, nil
 }

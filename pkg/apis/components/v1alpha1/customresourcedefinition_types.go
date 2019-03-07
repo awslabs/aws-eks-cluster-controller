@@ -14,6 +14,7 @@
 package v1alpha1
 
 import (
+	apiextv1beta "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -24,12 +25,19 @@ import (
 type CustomResourceDefinitionSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	apiextv1beta.CustomResourceDefinitionSpec `json:",inline"`
+
+	Cluster   string `json:"cluster"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
 }
 
 // CustomResourceDefinitionStatus defines the observed state of CustomResourceDefinition
 type CustomResourceDefinitionStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	apiextv1beta.CustomResourceDefinitionStatus `json:",inline"`
+	Status                                      string `json:"status,omitempty"`
 }
 
 // +genclient
