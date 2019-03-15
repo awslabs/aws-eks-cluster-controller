@@ -140,7 +140,7 @@ func (r *ReconcileCustomResourceDefinition) Reconcile(request reconcile.Request)
 		return reconcile.Result{}, err
 	}
 
-	remoteKey := types.NamespacedName{Namespace: instance.Spec.Namespace, Name: instance.Spec.Name}
+	remoteKey := types.NamespacedName{Name: instance.Spec.Name}
 
 	cluster := &clusterv1alpha1.EKS{}
 	clusterKey := types.NamespacedName{Name: instance.Spec.Cluster, Namespace: instance.Namespace}
@@ -171,21 +171,22 @@ func (r *ReconcileCustomResourceDefinition) Reconcile(request reconcile.Request)
 			crdFound := &apiextv1beta.CustomResourceDefinition{}
 			err := client.Get(context.TODO(), remoteKey, crdFound)
 			if err != nil && errors.IsNotFound(err) {
+				log.Info("remote crd not found removing the finalizers")
 				instance.Finalizers = finalizers.RemoveFinalizer(instance, CRDFinalizer)
 				if err := r.Client.Update(context.TODO(), instance); err != nil {
 					return reconcile.Result{}, err
 				}
 				return reconcile.Result{}, nil
 			} else if err != nil {
-				log.Error("could not get remote ingress", zap.Error(err))
+				log.Error("could not get remote crd", zap.Error(err))
 				return reconcile.Result{}, nil
 			}
 
 			if err := client.Delete(context.TODO(), crdFound); err != nil {
-				log.Error("could not delete remote ingress", zap.Error(err))
+				log.Error("could not delete remote crd", zap.Error(err))
 				return reconcile.Result{}, err
 			}
-			return reconcile.Result{}, nil
+			return reconcile.Result{Requeue: true}, nil
 		}
 		return reconcile.Result{}, nil
 	}
@@ -193,7 +194,6 @@ func (r *ReconcileCustomResourceDefinition) Reconcile(request reconcile.Request)
 	crdExpected := &apiextv1beta.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        instance.Spec.Name,
-			Namespace:   instance.Spec.Namespace,
 			Labels:      instance.Labels,
 			Annotations: instance.Annotations,
 		},
@@ -202,10 +202,10 @@ func (r *ReconcileCustomResourceDefinition) Reconcile(request reconcile.Request)
 	crdFound := &apiextv1beta.CustomResourceDefinition{}
 	err = client.Get(context.TODO(), remoteKey, crdFound)
 	if err != nil && errors.IsNotFound(err) {
-		log.Info("creating CRD")
+		log.Info("creating crd")
 
 		if err := client.Create(context.TODO(), crdExpected); err != nil {
-			log.Error("failed to create the remote CRD", zap.Error(err))
+			log.Error("failed to create the remote crd", zap.Error(err))
 			return reconcile.Result{}, err
 		}
 		instance.Finalizers = []string{CRDFinalizer}
@@ -234,6 +234,5 @@ func (r *ReconcileCustomResourceDefinition) Reconcile(request reconcile.Request)
 		}
 		log.Info("remote crd updated")
 	}
-
 	return reconcile.Result{}, nil
 }

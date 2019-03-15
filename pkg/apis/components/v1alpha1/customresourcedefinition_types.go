@@ -27,17 +27,15 @@ type CustomResourceDefinitionSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	apiextv1beta.CustomResourceDefinitionSpec `json:",inline"`
 
-	Cluster   string `json:"cluster"`
-	Name      string `json:"name"`
-	Namespace string `json:"namespace"`
+	Cluster string `json:"cluster"`
+	Name    string `json:"name"`
 }
 
 // CustomResourceDefinitionStatus defines the observed state of CustomResourceDefinition
 type CustomResourceDefinitionStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	apiextv1beta.CustomResourceDefinitionStatus `json:",inline"`
-	Status                                      string `json:"status,omitempty"`
+	Status string `json:"status,omitempty"`
 }
 
 // +genclient

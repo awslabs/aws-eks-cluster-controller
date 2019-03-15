@@ -34,8 +34,6 @@ spec:
               type: string
             names:
               type: object
-            namespace:
-              type: string
             scope:
               type: string
             subresources:
@@ -54,26 +52,11 @@ spec:
           - scope
           - cluster
           - name
-          - namespace
           type: object
         status:
           properties:
-            acceptedNames:
-              type: object
-            conditions:
-              items:
-                type: object
-              type: array
             status:
               type: string
-            storedVersions:
-              items:
-                type: string
-              type: array
-          required:
-          - conditions
-          - acceptedNames
-          - storedVersions
           type: object
   version: v1alpha1
 status:
