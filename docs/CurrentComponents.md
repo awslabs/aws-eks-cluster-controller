@@ -17,6 +17,7 @@ aws-eks-cluster-controller models following resources as Kubernetes [CustomResou
 1. [ClusterRoleBinding](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.13/#clusterrolebinding-v1-rbac-authorization-k8s-io)
 1. [StatefulSet](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.13/#statefulset-v1-apps)
 1. [DaemonSet](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.13/#daemonset-v1-apps)
+1. [CustomResourceDefinition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.13/#customresourcedefinition-v1beta1-apiextensions-k8s-io)
 
 ### Future Resources
 
