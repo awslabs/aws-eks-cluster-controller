@@ -30,12 +30,13 @@ type ComponentsV1alpha1Interface interface {
 	ClusterRolesGetter
 	ClusterRoleBindingsGetter
 	ConfigMapsGetter
-	CustomResourceDefinitionsGetter
+	DaemonSetsGetter
 	DeploymentsGetter
 	IngressesGetter
 	SecretsGetter
 	ServicesGetter
 	ServiceAccountsGetter
+	StatefulSetsGetter
 }
 
 // ComponentsV1alpha1Client is used to interact with features provided by the components.eks.amazonaws.com group.
@@ -55,8 +56,8 @@ func (c *ComponentsV1alpha1Client) ConfigMaps(namespace string) ConfigMapInterfa
 	return newConfigMaps(c, namespace)
 }
 
-func (c *ComponentsV1alpha1Client) CustomResourceDefinitions(namespace string) CustomResourceDefinitionInterface {
-	return newCustomResourceDefinitions(c, namespace)
+func (c *ComponentsV1alpha1Client) DaemonSets(namespace string) DaemonSetInterface {
+	return newDaemonSets(c, namespace)
 }
 
 func (c *ComponentsV1alpha1Client) Deployments(namespace string) DeploymentInterface {
@@ -77,6 +78,10 @@ func (c *ComponentsV1alpha1Client) Services(namespace string) ServiceInterface {
 
 func (c *ComponentsV1alpha1Client) ServiceAccounts(namespace string) ServiceAccountInterface {
 	return newServiceAccounts(c, namespace)
+}
+
+func (c *ComponentsV1alpha1Client) StatefulSets(namespace string) StatefulSetInterface {
+	return newStatefulSets(c, namespace)
 }
 
 // NewForConfig creates a new ComponentsV1alpha1Client for the given config.

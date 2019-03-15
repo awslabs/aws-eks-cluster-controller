@@ -123,6 +123,7 @@ type ReconcileEKS struct {
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
 // +kubebuilder:rbac:groups=cluster.eks.amazonaws.com,resources=controlplanes;nodegroups;ekss,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=components.eks.amazonaws.com,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch;create;update;patch;delete
 
 func (r *ReconcileEKS) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the EKS instance

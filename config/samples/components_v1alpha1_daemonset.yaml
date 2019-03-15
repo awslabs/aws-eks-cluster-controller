@@ -1,0 +1,22 @@
+apiVersion: components.eks.amazonaws.com/v1alpha1
+kind: DaemonSet
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: daemonset-sample
+spec:
+  cluster: eks-sample
+  name: nginx-daemonset
+  namespace: default
+  selector:
+    matchLabels:
+      app: nginx-daemonset
+  template:
+    metadata:
+      labels:
+        app: nginx-daemonset
+    spec:
+      containers:
+      - image: nginx
+        imagePullPolicy: Always
+        name: nginx

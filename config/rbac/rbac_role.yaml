@@ -163,6 +163,18 @@ rules:
 - apiGroups:
   - components.eks.amazonaws.com
   resources:
+  - daemonsets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - components.eks.amazonaws.com
+  resources:
   - deployments
   verbs:
   - get
@@ -185,6 +197,18 @@ rules:
   - controlplanes
   - nodegroups
   - ekss
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
   verbs:
   - get
   - list
@@ -305,6 +329,18 @@ rules:
   - get
   - update
   - patch
+- apiGroups:
+  - components.eks.amazonaws.com
+  resources:
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
 - apiGroups:
   - admissionregistration.k8s.io
   resources:

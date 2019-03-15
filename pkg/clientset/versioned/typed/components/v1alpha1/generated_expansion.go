@@ -26,6 +26,8 @@ type ConfigMapExpansion interface{}
 
 type CustomResourceDefinitionExpansion interface{}
 
+type DaemonSetExpansion interface{}
+
 type DeploymentExpansion interface{}
 
 type IngressExpansion interface{}
@@ -35,3 +37,5 @@ type SecretExpansion interface{}
 type ServiceExpansion interface{}
 
 type ServiceAccountExpansion interface{}
+
+type StatefulSetExpansion interface{}

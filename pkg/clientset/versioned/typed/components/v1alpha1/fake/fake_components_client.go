@@ -44,6 +44,10 @@ func (c *FakeComponentsV1alpha1) CustomResourceDefinitions(namespace string) v1a
 	return &FakeCustomResourceDefinitions{c, namespace}
 }
 
+func (c *FakeComponentsV1alpha1) DaemonSets(namespace string) v1alpha1.DaemonSetInterface {
+	return &FakeDaemonSets{c, namespace}
+}
+
 func (c *FakeComponentsV1alpha1) Deployments(namespace string) v1alpha1.DeploymentInterface {
 	return &FakeDeployments{c, namespace}
 }
@@ -62,6 +66,10 @@ func (c *FakeComponentsV1alpha1) Services(namespace string) v1alpha1.ServiceInte
 
 func (c *FakeComponentsV1alpha1) ServiceAccounts(namespace string) v1alpha1.ServiceAccountInterface {
 	return &FakeServiceAccounts{c, namespace}
+}
+
+func (c *FakeComponentsV1alpha1) StatefulSets(namespace string) v1alpha1.StatefulSetInterface {
+	return &FakeStatefulSets{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
