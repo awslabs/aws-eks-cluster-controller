@@ -6,7 +6,6 @@ metadata:
   name: foo-crd
 spec:
   name: foos.blah.blu.com
-  namespace: default
   cluster: eks-sample
   group: blah.blu.com
   names:

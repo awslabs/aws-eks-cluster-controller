@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/apis"
-	extapi "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextv1beta "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -17,7 +17,7 @@ func init() {
 	if err := apis.AddToScheme(scheme.Scheme); err != nil {
 		log.Panic(err)
 	}
-	if err := extapi.AddToScheme(scheme.Scheme); err != nil {
+	if err := apiextv1beta.AddToScheme(scheme.Scheme); err != nil {
 		log.Panic(err)
 	}
 }
