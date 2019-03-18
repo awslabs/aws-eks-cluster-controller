@@ -40,6 +40,10 @@ func (c *FakeComponentsV1alpha1) ConfigMaps(namespace string) v1alpha1.ConfigMap
 	return &FakeConfigMaps{c, namespace}
 }
 
+func (c *FakeComponentsV1alpha1) CustomResourceDefinitions(namespace string) v1alpha1.CustomResourceDefinitionInterface {
+	return &FakeCustomResourceDefinitions{c, namespace}
+}
+
 func (c *FakeComponentsV1alpha1) DaemonSets(namespace string) v1alpha1.DaemonSetInterface {
 	return &FakeDaemonSets{c, namespace}
 }

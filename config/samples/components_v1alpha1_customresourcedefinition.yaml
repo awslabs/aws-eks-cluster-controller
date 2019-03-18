@@ -1,0 +1,15 @@
+apiVersion: components.eks.amazonaws.com/v1alpha1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: foo-crd
+spec:
+  name: foos.blah.blu.com
+  cluster: eks-sample
+  group: blah.blu.com
+  names:
+    kind: Foo
+    plural: foos
+  scope: Namespaced
+  version: v1beta1

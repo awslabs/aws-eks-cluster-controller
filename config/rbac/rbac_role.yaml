@@ -121,6 +121,46 @@ rules:
   - patch
   - delete
 - apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - apps
+  resources:
+  - deployments/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - components.eks.amazonaws.com
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - components.eks.amazonaws.com
+  resources:
+  - customresourcedefinitions/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
   - components.eks.amazonaws.com
   resources:
   - daemonsets
@@ -166,9 +206,9 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - apiextensions.k8s.io
+  - components.eks.amazonaws.com
   resources:
-  - customresourcedefinitions
+  - configmaps
   verbs:
   - get
   - list
@@ -178,9 +218,9 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - components.eks.amazonaws.com
+  - apiextensions.k8s.io
   resources:
-  - configmaps
+  - customresourcedefinitions
   verbs:
   - get
   - list
