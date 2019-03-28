@@ -16,19 +16,12 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var c client.Client
-
-var expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: "foo-cp", Namespace: "default"}}
-var cpKey = types.NamespacedName{Name: "foo-cp", Namespace: "default"}
-
 const timeout = time.Second * 10
 
-// newReconciler returns a new reconcile.Reconciler
 func newTestReconciler(mgr manager.Manager) *ReconcileControlPlane {
 	var errDoesNotExist = awserr.New("ValidationError", "Stack with id eks-foo-cluster does not exist", nil)
 	return &ReconcileControlPlane{
@@ -41,6 +34,8 @@ func newTestReconciler(mgr manager.Manager) *ReconcileControlPlane {
 
 func TestReconcile(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
+	expectedRequest := reconcile.Request{NamespacedName: types.NamespacedName{Name: "foo-cp", Namespace: "default"}}
+	cpKey := types.NamespacedName{Name: "foo-cp", Namespace: "default"}
 
 	cluster := &clusterv1alpha1.EKS{
 		ObjectMeta: metav1.ObjectMeta{Name: "foo-eks", Namespace: "default"},
@@ -66,7 +61,7 @@ func TestReconcile(t *testing.T) {
 	// channel when it is finished.
 	mgr, err := manager.New(cfg, manager.Options{})
 	g.Expect(err).NotTo(gomega.HaveOccurred())
-	c = mgr.GetClient()
+	c := mgr.GetClient()
 
 	reconciler := newTestReconciler(mgr)
 	recFn, requests := SetupTestReconcile(reconciler)
