@@ -2,7 +2,9 @@ package aws
 
 import (
 	"bytes"
+	"fmt"
 	"regexp"
+	"strings"
 	"text/template"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -96,7 +98,11 @@ func DescribeStack(cfnSvc cloudformationiface.CloudFormationAPI, stackName strin
 
 //GetCFNTemplateBody takes a cfnTemplate and a corresponding struct as input and return the rendered template
 func GetCFNTemplateBody(cfnTemplate string, input interface{}) (string, error) {
-	templatizedCFN, err := template.New("cfntemplate").Option("missingkey=error").Parse(cfnTemplate)
+	templatizedCFN, err := template.New("cfntemplate").Option("missingkey=error").Funcs(template.FuncMap{
+		"quoteList": func(s []string) string {
+			return fmt.Sprintf(`["%s"]`, strings.Join(s, `", "`))
+		}}).Parse(cfnTemplate)
+
 	if err != nil {
 		return "", err
 	}
@@ -104,6 +110,5 @@ func GetCFNTemplateBody(cfnTemplate string, input interface{}) (string, error) {
 	if err := templatizedCFN.Execute(b, input); err != nil {
 		return "", err
 	}
-
 	return b.String(), nil
 }

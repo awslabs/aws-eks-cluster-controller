@@ -6,7 +6,7 @@ import (
 	"time"
 
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
-	"github.com/awslabs/aws-eks-cluster-controller/pkg/cfnhelper"
+	awsHelper "github.com/awslabs/aws-eks-cluster-controller/pkg/aws"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/finalizers"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
 
@@ -166,8 +166,8 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		if finalizers.HasFinalizer(instance, FinalizerCFNStack) {
 			logger.Info("deleting nodegroup cloudformation stack")
 
-			stack, err := cfnhelper.DescribeStack(cfnSvc, stackName)
-			if err != nil && cfnhelper.IsDoesNotExist(err, stackName) {
+			stack, err := awsHelper.DescribeStack(cfnSvc, stackName)
+			if err != nil && awsHelper.StackDoesNotExist(err) {
 				instance.SetFinalizers(finalizers.RemoveFinalizer(instance, FinalizerCFNStack))
 				return reconcile.Result{}, r.Update(context.TODO(), instance)
 			}
@@ -195,8 +195,8 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		}
 	}
 
-	stack, err := cfnhelper.DescribeStack(cfnSvc, stackName)
-	if err != nil && cfnhelper.IsDoesNotExist(err, stackName) {
+	stack, err := awsHelper.DescribeStack(cfnSvc, stackName)
+	if err != nil && awsHelper.StackDoesNotExist(err) {
 		logger.Info("creating nodegroup cloudformation stack")
 
 		err = r.createNodeGroupStack(cfnSvc, instance, eksCluster)
@@ -259,7 +259,7 @@ type nodeGroupTemplateInput struct {
 
 func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup, eks *clusterv1alpha1.EKS) error {
 
-	templateBody, err := cfnhelper.GetCFNTemplateBody(nodeGroupCFNTemplate, nodeGroupTemplateInput{
+	templateBody, err := awsHelper.GetCFNTemplateBody(nodeGroupCFNTemplate, nodeGroupTemplateInput{
 		ClusterName:           eks.Spec.ControlPlane.ClusterName,
 		ControlPlaneStackName: eks.GetControlPlaneStackName(),
 		AMI:                   GetAMI(nodegroup.GetVersion(), eks.Spec.Region),
