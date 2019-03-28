@@ -157,7 +157,12 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		zap.String("StackName", stackName),
 	)
 
-	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
+	if instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !finalizers.HasFinalizer(instance, finalizer) {
+			logger.Info("adding finalizer", zap.String("instance", instance.GetName()), zap.String("finalizer", finalizer))
+			instance.SetFinalizers(finalizers.AddFinalizer(instance, finalizer))
+		}
+	} else {
 		if finalizers.HasFinalizer(instance, finalizer) {
 			logger.Info("deleting control plane cloudformation stack")
 
