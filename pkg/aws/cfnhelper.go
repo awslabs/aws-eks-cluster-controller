@@ -14,14 +14,14 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 )
 
-//CompleteStatuses contains all CloudFormation status strings that we consider to be complete for a vpn
+//CompleteStatuses contains all CloudFormation status strings considered complete
 var CompleteStatuses = []string{
 	cloudformation.StackStatusCreateComplete,
 	cloudformation.StackStatusUpdateComplete,
 	cloudformation.StackStatusDeleteComplete,
 }
 
-//FailedStatuses contains all CloudFormation status strings that we consider to be failed for a vpn
+//FailedStatuses contains all CloudFormation status strings considered failed
 var FailedStatuses = []string{
 	cloudformation.StackStatusCreateFailed,
 	cloudformation.StackStatusRollbackComplete,
@@ -31,7 +31,7 @@ var FailedStatuses = []string{
 	cloudformation.StackStatusDeleteFailed,
 }
 
-//PendingStatuses contains all CloudFormation status strings that we consider to be pending for a vpn
+//PendingStatuses contains all CloudFormation status strings consideredpending
 var PendingStatuses = []string{
 	cloudformation.StackStatusCreateInProgress,
 	cloudformation.StackStatusDeleteInProgress,
