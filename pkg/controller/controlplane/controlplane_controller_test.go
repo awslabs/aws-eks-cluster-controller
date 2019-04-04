@@ -199,10 +199,6 @@ func TestReconcileFail(t *testing.T) {
 		err := c.Get(context.TODO(), cpKey, getCP)
 		return getCP.Status.Status, err
 	}).Should(gomega.Equal(StatusFailed))
-
-	// err = c.Delete(context.TODO(), instance)
-	// g.Expect(err).NotTo(gomega.HaveOccurred())
-	// g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 }
 
 func TestReconcileControlPlane_Reconcile(t *testing.T) {
@@ -320,7 +316,7 @@ func TestReconcileControlPlane_Reconcile(t *testing.T) {
 					NamespacedName: types.NamespacedName{Name: "test-controlplane-name", Namespace: "test-controlplane-namespace"},
 				},
 			},
-			want:    reconcile.Result{},
+			want:    reconcile.Result{RequeueAfter: 5 * time.Second},
 			wantErr: false,
 		},
 	}
@@ -542,7 +538,7 @@ func TestReconcileControlPlane_Reconcile_CloudformationStatusUnexpected(t *testi
 		{
 			name:      "errors if cloudformation stack in unexpected state",
 			cfnStatus: "invalid status",
-			want:      reconcile.Result{},
+			want:      reconcile.Result{RequeueAfter: 5 * time.Second},
 			wantErr:   false,
 		},
 	}

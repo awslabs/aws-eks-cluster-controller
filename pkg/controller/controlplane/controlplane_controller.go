@@ -236,11 +236,8 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		return reconcile.Result{}, r.Update(context.TODO(), instance)
 	}
 
-	logger.Info("stack in unexpected state", zap.String("StackStatus", *stack.StackStatus))
-	instance.Status.Status = StatusFailed
-	err = r.Update(context.TODO(), instance)
-	return reconcile.Result{}, err
-
+	r.fail(instance, "stack in unexpected state", err, logger)
+	return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
 func (r *ReconcileControlPlane) fail(instance *clusterv1alpha1.ControlPlane, msg string, err error, logger *zap.Logger) {
