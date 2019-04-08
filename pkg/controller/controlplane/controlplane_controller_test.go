@@ -1,7 +1,6 @@
 package controlplane
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -199,6 +198,10 @@ func TestReconcileFail(t *testing.T) {
 		err := c.Get(context.TODO(), cpKey, getCP)
 		return getCP.Status.Status, err
 	}).Should(gomega.Equal(StatusFailed))
+
+	err = c.Delete(context.TODO(), instance)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 }
 
 func TestReconcileControlPlane_Reconcile(t *testing.T) {
@@ -341,23 +344,42 @@ func TestReconcileControlPlane_Reconcile(t *testing.T) {
 	}
 }
 
-func TestReconcileControlPlane_Reconcile_CloudformationStatusPending(t *testing.T) {
+func TestReconcileControlPlane_Reconcile_CloudformationStatusChecks(t *testing.T) {
 	apis.AddToScheme(scheme.Scheme)
 	tests := []struct {
+		name     string
 		statuses []string
 		want     reconcile.Result
 		wantErr  bool
 	}{
 		{
+			name:     "requeues if stack has a pending status",
 			statuses: awsHelper.PendingStatuses,
+			want:     reconcile.Result{RequeueAfter: 5 * time.Second},
+			wantErr:  false,
+		},
+		{
+			name:     "completes if stack hsa a completed status",
+			statuses: awsHelper.CompleteStatuses,
+			want:     reconcile.Result{},
+			wantErr:  false,
+		},
+		{
+			name:     "fails if stack has a failed status",
+			statuses: awsHelper.FailedStatuses,
+			want:     reconcile.Result{},
+			wantErr:  false,
+		},
+		{
+			name:     "requeues if stack has an unexpected status",
+			statuses: []string{"invalid status"},
 			want:     reconcile.Result{RequeueAfter: 5 * time.Second},
 			wantErr:  false,
 		},
 	}
 	for _, tt := range tests {
 		for _, status := range tt.statuses {
-			name := fmt.Sprintf("requeues if cloudformation status is %s", status)
-			t.Run(name, func(t *testing.T) {
+			t.Run(tt.name, func(t *testing.T) {
 				r := &ReconcileControlPlane{
 					Client: fakeclient.NewFakeClient(
 						&clusterv1alpha1.ControlPlane{
@@ -400,189 +422,5 @@ func TestReconcileControlPlane_Reconcile_CloudformationStatusPending(t *testing.
 				}
 			})
 		}
-	}
-}
-
-func TestReconcileControlPlane_Reconcile_CloudformationStatusComplete(t *testing.T) {
-	apis.AddToScheme(scheme.Scheme)
-	tests := []struct {
-		statuses []string
-		want     reconcile.Result
-		wantErr  bool
-	}{
-		{
-			statuses: awsHelper.CompleteStatuses,
-			want:     reconcile.Result{},
-			wantErr:  false,
-		},
-	}
-	for _, tt := range tests {
-		for _, status := range tt.statuses {
-			name := fmt.Sprintf("requeues if cloudformation status is %s", status)
-			t.Run(name, func(t *testing.T) {
-				r := &ReconcileControlPlane{
-					Client: fakeclient.NewFakeClient(
-						&clusterv1alpha1.ControlPlane{
-							ObjectMeta: metav1.ObjectMeta{
-								Name:      "test-controlplane-name",
-								Namespace: "test-controlplane-namespace",
-								Labels: map[string]string{
-									"eks.owner.name":      "test-eks-name",
-									"eks.owner.namespace": "test-eks-namespace",
-								},
-							},
-						},
-						&clusterv1alpha1.EKS{
-							ObjectMeta: metav1.ObjectMeta{
-								Name:      "test-eks-name",
-								Namespace: "test-eks-namespace",
-							},
-							Spec: clusterv1alpha1.EKSSpec{
-								ControlPlane: clusterv1alpha1.ControlPlaneSpec{
-									ClusterName: "test-clustername",
-								},
-							},
-						},
-					),
-					scheme: scheme.Scheme,
-					log:    logging.New(),
-					cfnSvc: &fakeaws.MockCloudformationAPI{Status: status},
-				}
-				got, err := r.Reconcile(
-					reconcile.Request{
-						NamespacedName: types.NamespacedName{Name: "test-controlplane-name", Namespace: "test-controlplane-namespace"},
-					},
-				)
-				if (err != nil) != tt.wantErr {
-					t.Errorf("ReconcileControlPlane.Reconcile() error = %v, wantErr %v", err, tt.wantErr)
-					return
-				}
-				if !reflect.DeepEqual(got, tt.want) {
-					t.Errorf("ReconcileControlPlane.Reconcile() = %v, want %v", got, tt.want)
-				}
-			})
-		}
-	}
-}
-
-func TestReconcileControlPlane_Reconcile_CloudformationStatusFailed(t *testing.T) {
-	apis.AddToScheme(scheme.Scheme)
-	tests := []struct {
-		statuses []string
-		want     reconcile.Result
-		wantErr  bool
-	}{
-		{
-			statuses: awsHelper.FailedStatuses,
-			want:     reconcile.Result{},
-			wantErr:  false,
-		},
-	}
-	for _, tt := range tests {
-		for _, status := range tt.statuses {
-			name := fmt.Sprintf("requeues if cloudformation status is %s", status)
-			t.Run(name, func(t *testing.T) {
-				r := &ReconcileControlPlane{
-					Client: fakeclient.NewFakeClient(
-						&clusterv1alpha1.ControlPlane{
-							ObjectMeta: metav1.ObjectMeta{
-								Name:      "test-controlplane-name",
-								Namespace: "test-controlplane-namespace",
-								Labels: map[string]string{
-									"eks.owner.name":      "test-eks-name",
-									"eks.owner.namespace": "test-eks-namespace",
-								},
-							},
-						},
-						&clusterv1alpha1.EKS{
-							ObjectMeta: metav1.ObjectMeta{
-								Name:      "test-eks-name",
-								Namespace: "test-eks-namespace",
-							},
-							Spec: clusterv1alpha1.EKSSpec{
-								ControlPlane: clusterv1alpha1.ControlPlaneSpec{
-									ClusterName: "test-clustername",
-								},
-							},
-						},
-					),
-					scheme: scheme.Scheme,
-					log:    logging.New(),
-					cfnSvc: &fakeaws.MockCloudformationAPI{Status: status},
-				}
-				got, err := r.Reconcile(
-					reconcile.Request{
-						NamespacedName: types.NamespacedName{Name: "test-controlplane-name", Namespace: "test-controlplane-namespace"},
-					},
-				)
-				if (err != nil) != tt.wantErr {
-					t.Errorf("ReconcileControlPlane.Reconcile() error = %v, wantErr %v", err, tt.wantErr)
-					return
-				}
-				if !reflect.DeepEqual(got, tt.want) {
-					t.Errorf("ReconcileControlPlane.Reconcile() = %v, want %v", got, tt.want)
-				}
-			})
-		}
-	}
-}
-
-func TestReconcileControlPlane_Reconcile_CloudformationStatusUnexpected(t *testing.T) {
-	apis.AddToScheme(scheme.Scheme)
-	tests := []struct {
-		name      string
-		cfnStatus string
-		want      reconcile.Result
-		wantErr   bool
-	}{
-		{
-			name:      "errors if cloudformation stack in unexpected state",
-			cfnStatus: "invalid status",
-			want:      reconcile.Result{RequeueAfter: 5 * time.Second},
-			wantErr:   false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := &ReconcileControlPlane{
-				Client: fakeclient.NewFakeClient(
-					&clusterv1alpha1.ControlPlane{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-controlplane-name",
-							Namespace: "test-controlplane-namespace",
-							Labels: map[string]string{
-								"eks.owner.name":      "test-eks-name",
-								"eks.owner.namespace": "test-eks-namespace",
-							},
-						},
-					},
-					&clusterv1alpha1.EKS{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-eks-name",
-							Namespace: "test-eks-namespace",
-						},
-						Spec: clusterv1alpha1.EKSSpec{
-							ControlPlane: clusterv1alpha1.ControlPlaneSpec{
-								ClusterName: "test-clustername",
-							},
-						},
-					},
-				),
-				scheme: scheme.Scheme,
-				log:    logging.New(),
-				cfnSvc: &fakeaws.MockCloudformationAPI{Status: tt.cfnStatus},
-			}
-			got, err := r.Reconcile(reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: "test-controlplane-name", Namespace: "test-controlplane-namespace"},
-			},
-			)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ReconcileControlPlane.Reconcile() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ReconcileControlPlane.Reconcile() = %v, want %v", got, tt.want)
-			}
-		})
 	}
 }

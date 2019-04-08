@@ -165,7 +165,7 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		if finalizers.HasFinalizer(instance, finalizer) {
 			logger.Info("deleting control plane cloudformation stack")
 
-			if err != nil && awsHelper.StackDoesNotExist(err) {
+			if err != nil && awsHelper.IsStackDoesNotExist(err) {
 				logger.Info("stack does not exist, removing finalizer", zap.String("Finalizer", finalizer))
 				instance.SetFinalizers(finalizers.RemoveFinalizer(instance, finalizer))
 				return reconcile.Result{}, r.Update(context.TODO(), instance)
@@ -197,7 +197,7 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 
 	}
 
-	if err != nil && awsHelper.StackDoesNotExist(err) {
+	if err != nil && awsHelper.IsStackDoesNotExist(err) {
 		logger.Info("creating stack")
 
 		err = r.createControlPlaneStack(cfnSvc, stackName, instance)

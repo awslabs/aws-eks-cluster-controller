@@ -73,8 +73,8 @@ func IsPending(status string) bool {
 	return false
 }
 
-//StackDoesNotExist Checks if the error recieved for DescribeStacks denotes if the stack is non exsistent
-func StackDoesNotExist(err error) bool {
+//IsStackDoesNotExist Checks if the error recieved for DescribeStacks denotes if the stack is non exsistent
+func IsStackDoesNotExist(err error) bool {
 	if aErr, ok := err.(awserr.Error); ok {
 		matched, _ := regexp.MatchString(`status code: 400`, aErr.Error())
 		if aErr.Code() == "ValidationError" {

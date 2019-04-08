@@ -167,7 +167,7 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 			logger.Info("deleting nodegroup cloudformation stack")
 
 			stack, err := awsHelper.DescribeStack(cfnSvc, stackName)
-			if err != nil && awsHelper.StackDoesNotExist(err) {
+			if err != nil && awsHelper.IsStackDoesNotExist(err) {
 				instance.SetFinalizers(finalizers.RemoveFinalizer(instance, FinalizerCFNStack))
 				return reconcile.Result{}, r.Update(context.TODO(), instance)
 			}
@@ -196,7 +196,7 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 	}
 
 	stack, err := awsHelper.DescribeStack(cfnSvc, stackName)
-	if err != nil && awsHelper.StackDoesNotExist(err) {
+	if err != nil && awsHelper.IsStackDoesNotExist(err) {
 		logger.Info("creating nodegroup cloudformation stack")
 
 		err = r.createNodeGroupStack(cfnSvc, instance, eksCluster)

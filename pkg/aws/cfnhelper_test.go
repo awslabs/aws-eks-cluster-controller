@@ -72,7 +72,7 @@ func TestStackDoesNotExist(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := StackDoesNotExist(tc.inputErr)
+			got := IsStackDoesNotExist(tc.inputErr)
 			if got != tc.expected {
 				t.Errorf("Expected %t for input %v : got %t", tc.expected, tc.inputErr, got)
 			}
