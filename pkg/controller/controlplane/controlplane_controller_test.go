@@ -3,9 +3,12 @@ package controlplane
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/aws/aws-sdk-go/service/cloudformation"
 
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
@@ -29,6 +32,12 @@ import (
 
 var errDoesNotExist = awserr.New("ValidationError", `ValidationError: Stack with id eks-foo-cluster does not exist, status code: 400, request id: 42`, nil)
 
+func defaultcfnSvc() *awsHelper.MockCloudformationAPI {
+	return &awsHelper.MockCloudformationAPI{
+		FailDescribe: true,
+		Err:          errDoesNotExist,
+	}
+}
 func newTestReconciler(cfnSvc *awsHelper.MockCloudformationAPI, ns string, blankObjs ...metav1.Object) *ReconcileControlPlane {
 	objs := []runtime.Object{}
 	for _, obj := range blankObjs {
@@ -47,12 +56,6 @@ func newTestReconciler(cfnSvc *awsHelper.MockCloudformationAPI, ns string, blank
 		},
 	})
 
-	if cfnSvc == nil {
-		cfnSvc = &awsHelper.MockCloudformationAPI{
-			FailDescribe: true,
-			Err:          errDoesNotExist,
-		}
-	}
 	return &ReconcileControlPlane{
 		Client: fakeclient.NewFakeClient(objs...),
 		scheme: scheme.Scheme,
@@ -62,15 +65,15 @@ func newTestReconciler(cfnSvc *awsHelper.MockCloudformationAPI, ns string, blank
 }
 
 func TestReconcile(t *testing.T) {
-	g := gomega.NewGomegaWithT(t)
 
 	tests := []struct {
-		name       string
-		cfnSvc     *awsHelper.MockCloudformationAPI
-		request    reconcile.Request
-		worldState []metav1.Object
-		finalState *clusterv1alpha1.ControlPlane
-		wantErr    bool
+		name          string
+		cfnSvc        *awsHelper.MockCloudformationAPI
+		request       reconcile.Request
+		worldState    []metav1.Object
+		finalState    *clusterv1alpha1.ControlPlane
+		wantErr       bool
+		wantCfnWrites int
 	}{
 		{
 			name: "updates instance status to error if missing labels",
@@ -89,6 +92,7 @@ func TestReconcile(t *testing.T) {
 					Status: "Error",
 				},
 			},
+			cfnSvc:  defaultcfnSvc(),
 			wantErr: true,
 		},
 		{
@@ -112,10 +116,11 @@ func TestReconcile(t *testing.T) {
 					Status: "Error",
 				},
 			},
+			cfnSvc:  defaultcfnSvc(),
 			wantErr: true,
 		},
 		{
-			name: "can describe a controlplane stack",
+			name: "can create a controlplane stack",
 			worldState: []metav1.Object{
 				&clusterv1alpha1.ControlPlane{
 					ObjectMeta: metav1.ObjectMeta{
@@ -130,11 +135,16 @@ func TestReconcile(t *testing.T) {
 			finalState: &clusterv1alpha1.ControlPlane{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "uut",
+					Finalizers: []string{
+						"cfn-stack.controlplane.eks.amazonaws.com",
+					},
 				},
 				Status: clusterv1alpha1.ControlPlaneStatus{
 					Status: "Creating",
 				},
 			},
+			cfnSvc:        defaultcfnSvc(),
+			wantCfnWrites: 1,
 		},
 		{
 			name: "will complete when controlplane is finished",
@@ -152,12 +162,117 @@ func TestReconcile(t *testing.T) {
 			finalState: &clusterv1alpha1.ControlPlane{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "uut",
+					Finalizers: []string{
+						"cfn-stack.controlplane.eks.amazonaws.com",
+					},
 				},
 				Status: clusterv1alpha1.ControlPlaneStatus{
 					Status: "Complete",
 				},
 			},
 			cfnSvc: &awsHelper.MockCloudformationAPI{Status: awsHelper.CompleteStatuses[0]},
+		},
+		{
+			name: "will remove finalizer if deleted, and stack does not exist",
+			worldState: []metav1.Object{
+				&clusterv1alpha1.ControlPlane{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "uut",
+						Labels: map[string]string{
+							"eks.owner.name":      "test-eks-name",
+							"eks.owner.namespace": "test-eks-namespace",
+						},
+						Finalizers: []string{
+							"cfn-stack.controlplane.eks.amazonaws.com",
+						},
+						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					},
+				},
+			},
+			finalState: &clusterv1alpha1.ControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "uut",
+				},
+				Status: clusterv1alpha1.ControlPlaneStatus{},
+			},
+			cfnSvc: defaultcfnSvc(),
+		},
+		{
+			name: "will remove finalizer if deleted, and cfn delete complete",
+			worldState: []metav1.Object{
+				&clusterv1alpha1.ControlPlane{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "uut",
+						Labels: map[string]string{
+							"eks.owner.name":      "test-eks-name",
+							"eks.owner.namespace": "test-eks-namespace",
+						},
+						Finalizers: []string{
+							"cfn-stack.controlplane.eks.amazonaws.com",
+						},
+						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					},
+				},
+			},
+			finalState: &clusterv1alpha1.ControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "uut",
+				},
+				Status: clusterv1alpha1.ControlPlaneStatus{},
+			},
+			cfnSvc: &awsHelper.MockCloudformationAPI{Status: cloudformation.StackStatusDeleteComplete},
+		},
+		{
+			name: "will remove delete cfn if deleted",
+			worldState: []metav1.Object{
+				&clusterv1alpha1.ControlPlane{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "uut",
+						Labels: map[string]string{
+							"eks.owner.name":      "test-eks-name",
+							"eks.owner.namespace": "test-eks-namespace",
+						},
+						Finalizers: []string{
+							"cfn-stack.controlplane.eks.amazonaws.com",
+						},
+						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					},
+				},
+			},
+			finalState: &clusterv1alpha1.ControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "uut",
+					Finalizers: []string{
+						"cfn-stack.controlplane.eks.amazonaws.com",
+					},
+				},
+				Status: clusterv1alpha1.ControlPlaneStatus{},
+			},
+			cfnSvc:        &awsHelper.MockCloudformationAPI{Status: cloudformation.StackStatusCreateComplete},
+			wantCfnWrites: 1,
+		},
+		{
+			name: "will do nothing if deleted with nothing to do",
+			worldState: []metav1.Object{
+				&clusterv1alpha1.ControlPlane{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "uut",
+						Labels: map[string]string{
+							"eks.owner.name":      "test-eks-name",
+							"eks.owner.namespace": "test-eks-namespace",
+						},
+
+						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					},
+				},
+			},
+			finalState: &clusterv1alpha1.ControlPlane{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "uut",
+				},
+				Status: clusterv1alpha1.ControlPlaneStatus{},
+			},
+			cfnSvc: defaultcfnSvc(),
 		},
 	}
 	count := uint64(0)
@@ -166,21 +281,26 @@ func TestReconcile(t *testing.T) {
 		ns := fmt.Sprintf("test-%02d", count)
 		func(ns string, count uint64) {
 			t.Run(tt.name, func(t *testing.T) {
+				g := gomega.NewGomegaWithT(t)
+
 				reconciler := newTestReconciler(tt.cfnSvc, ns, tt.worldState...)
 
 				_, err := reconciler.Reconcile(reconcile.Request{NamespacedName: types.NamespacedName{Name: "uut", Namespace: ns}})
 
-				if (err != nil) != tt.wantErr {
-					t.Errorf("ReconcileControlPlane.Reconcile() error = %v, wantErr %v", err, tt.wantErr)
-					return
+				if tt.wantErr {
+					g.Expect(err).ToNot(gomega.Succeed())
+				} else {
+					g.Expect(err).To(gomega.Succeed())
 				}
 
 				obj := &clusterv1alpha1.ControlPlane{}
 				g.Expect(reconciler.Get(context.TODO(), client.ObjectKey{Name: "uut", Namespace: ns}, obj)).To(gomega.BeNil())
 
+				sort.Strings(obj.Finalizers)
+				g.Expect(obj.Finalizers).To(gomega.Equal(tt.finalState.Finalizers))
 				g.Expect(obj.Spec).To(gomega.Equal(tt.finalState.Spec))
 				g.Expect(obj.Status).To(gomega.Equal(tt.finalState.Status))
-
+				g.Expect(tt.cfnSvc.Writes).To(gomega.Equal(tt.wantCfnWrites))
 			})
 		}(ns, count)
 	}

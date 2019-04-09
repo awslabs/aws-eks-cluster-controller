@@ -194,7 +194,8 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 			}
 			return reconcile.Result{Requeue: true}, nil
 		}
-
+		// instance is deleted, but nothing to do.
+		return reconcile.Result{}, nil
 	}
 
 	if err != nil && awsHelper.IsStackDoesNotExist(err) {

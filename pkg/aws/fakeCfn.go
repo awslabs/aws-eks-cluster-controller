@@ -10,6 +10,8 @@ import (
 type MockCloudformationAPI struct {
 	cloudformationiface.CloudFormationAPI
 
+	Writes int
+
 	Err    error
 	Status string
 
@@ -19,6 +21,7 @@ type MockCloudformationAPI struct {
 }
 
 func (m *MockCloudformationAPI) CreateStack(input *cloudformation.CreateStackInput) (*cloudformation.CreateStackOutput, error) {
+	m.Writes++
 	if m.FailCreate {
 		return nil, m.Err
 	}
@@ -29,7 +32,7 @@ func (m *MockCloudformationAPI) CreateStack(input *cloudformation.CreateStackInp
 }
 
 func (m *MockCloudformationAPI) UpdateStack(input *cloudformation.UpdateStackInput) (*cloudformation.UpdateStackOutput, error) {
-
+	m.Writes++
 	return &cloudformation.UpdateStackOutput{
 		StackId: aws.String("foo"),
 	}, nil
@@ -55,6 +58,7 @@ func (m *MockCloudformationAPI) DescribeStacks(input *cloudformation.DescribeSta
 }
 
 func (m *MockCloudformationAPI) DeleteStack(input *cloudformation.DeleteStackInput) (*cloudformation.DeleteStackOutput, error) {
+	m.Writes++
 	if m.FailDelete {
 		return nil, m.Err
 	}
