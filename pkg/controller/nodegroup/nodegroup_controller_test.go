@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
-	"github.com/awslabs/aws-eks-cluster-controller/pkg/cfnhelper"
+	awsHelper "github.com/awslabs/aws-eks-cluster-controller/pkg/aws"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
 	"github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -42,13 +42,13 @@ func getEKSCluster(name string) *clusterv1alpha1.EKS {
 const timeout = time.Second * 5
 
 func newTestReconciler(mgr manager.Manager) *ReconcileNodeGroup {
-	var errDoesNotExist = awserr.New("ValidationError", "Stack with id eks-foopla-nodegroup-ngroup1 does not exist", nil)
+	var errDoesNotExist = awserr.New("ValidationError", `ValidationError: Stack with id eks-foopla-nodegroup-ngroup1 does not exist, status code: 400, request id: 42`, nil)
 	return &ReconcileNodeGroup{
 		Client: mgr.GetClient(),
 		scheme: mgr.GetScheme(),
 		log:    logging.New(),
 		sess:   nil,
-		cfnSvc: &cfnhelper.MockCloudformationAPI{FailDescribe: true, Err: errDoesNotExist},
+		cfnSvc: &awsHelper.MockCloudformationAPI{FailDescribe: true, Err: errDoesNotExist},
 	}
 }
 
@@ -105,7 +105,7 @@ func TestNodeGroupReconcile(t *testing.T) {
 		return getNG.Status.Status, err
 	}).Should(gomega.Equal(StatusCreating))
 
-	reconciler.cfnSvc = &cfnhelper.MockCloudformationAPI{Status: cloudformation.StackStatusCreateInProgress}
+	reconciler.cfnSvc = &awsHelper.MockCloudformationAPI{Status: cloudformation.StackStatusCreateInProgress}
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 
 	getNG = &clusterv1alpha1.NodeGroup{}
@@ -113,7 +113,7 @@ func TestNodeGroupReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Expect(getNG.Status.Status).Should(gomega.Equal(StatusCreating))
 
-	reconciler.cfnSvc = &cfnhelper.MockCloudformationAPI{Status: cloudformation.StackStatusCreateComplete}
+	reconciler.cfnSvc = &awsHelper.MockCloudformationAPI{Status: cloudformation.StackStatusCreateComplete}
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 
 	g.Eventually(func() (string, error) {

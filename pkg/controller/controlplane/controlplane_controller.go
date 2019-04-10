@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/cloudformation/cloudformationiface"
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
-	"github.com/awslabs/aws-eks-cluster-controller/pkg/cfnhelper"
+	awsHelper "github.com/awslabs/aws-eks-cluster-controller/pkg/aws"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/finalizers"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
 	"go.uber.org/zap"
@@ -30,8 +30,6 @@ var (
 	StatusCreating       = "Creating"
 	StatusFailed         = "Failed"
 	StatusError          = "Error"
-
-	FinalizerCFNStack = "cfn-stack.controlplane.eks.amazonaws.com"
 )
 
 /**
@@ -96,7 +94,7 @@ type ReconcileControlPlane struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cluster.eks.amazonaws.com,resources=controlplanes,verbs=get;list;watch;create;update;patch;delete
 func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	// Fetch the ControlPlane instance
+
 	logger := r.log.With(
 		zap.String("Kind", "ControlPlane"),
 		zap.String("Name", request.Name),
@@ -114,8 +112,6 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
-
-	logger.Info("got reconcile request")
 
 	labelsToVerify := []string{"eks.owner.name", "eks.owner.namespace"}
 	for _, label := range labelsToVerify {
@@ -136,8 +132,6 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 	}
 	logger.Info("found cluster", zap.String("ClusterName", eksCluster.Name))
 
-	stackName := eksCluster.GetControlPlaneStackName()
-
 	var cfnSvc cloudformationiface.CloudFormationAPI
 	if r.cfnSvc == nil {
 		targetAccountSession, err := eksCluster.Spec.GetCrossAccountSession(r.sess)
@@ -147,33 +141,43 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 			r.Update(context.TODO(), instance)
 			return reconcile.Result{}, err
 		}
-
 		cfnSvc = cloudformation.New(targetAccountSession)
 	} else {
 		cfnSvc = r.cfnSvc
 	}
 
+	stackName := eksCluster.GetControlPlaneStackName()
+	finalizer := "cfn-stack.controlplane.eks.amazonaws.com"
 	logger = logger.With(
 		zap.String("AWSAccountID", eksCluster.Spec.AccountID),
 		zap.String("AWSRegion", eksCluster.Spec.Region),
 		zap.String("StackName", stackName),
 	)
 
-	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
-		if finalizers.HasFinalizer(instance, FinalizerCFNStack) {
+	stack, err := awsHelper.DescribeStack(cfnSvc, stackName)
+
+	if instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !finalizers.HasFinalizer(instance, finalizer) {
+			logger.Info("adding finalizer", zap.String("Finalizer", finalizer))
+			instance.SetFinalizers(finalizers.AddFinalizer(instance, finalizer))
+		}
+	} else {
+		if finalizers.HasFinalizer(instance, finalizer) {
 			logger.Info("deleting control plane cloudformation stack")
 
-			stack, err := cfnhelper.DescribeStack(cfnSvc, stackName)
-			if err != nil && cfnhelper.IsDoesNotExist(err, stackName) {
-				instance.SetFinalizers(finalizers.RemoveFinalizer(instance, FinalizerCFNStack))
+			if err != nil && awsHelper.IsStackDoesNotExist(err) {
+				logger.Info("stack does not exist, removing finalizer", zap.String("Finalizer", finalizer))
+				instance.SetFinalizers(finalizers.RemoveFinalizer(instance, finalizer))
 				return reconcile.Result{}, r.Update(context.TODO(), instance)
 			}
 			if err != nil {
 				r.fail(instance, "error deleting controlplane cloudformation stack", err, logger)
 				return reconcile.Result{}, err
 			}
+
 			if *stack.StackStatus == cloudformation.StackStatusDeleteComplete {
-				instance.SetFinalizers(finalizers.RemoveFinalizer(instance, FinalizerCFNStack))
+				logger.Info("stack deleted, removing finalizer", zap.String("Finalizer", finalizer))
+				instance.SetFinalizers(finalizers.RemoveFinalizer(instance, finalizer))
 				return reconcile.Result{}, r.Update(context.TODO(), instance)
 			}
 
@@ -190,12 +194,12 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 			}
 			return reconcile.Result{Requeue: true}, nil
 		}
-
+		// instance is deleted, but nothing to do.
+		return reconcile.Result{}, nil
 	}
 
-	stack, err := cfnhelper.DescribeStack(cfnSvc, stackName)
-	if err != nil && cfnhelper.IsDoesNotExist(err, stackName) {
-		logger.Info("creating EKS control plane cloudformation stack")
+	if err != nil && awsHelper.IsStackDoesNotExist(err) {
+		logger.Info("creating stack")
 
 		err = r.createControlPlaneStack(cfnSvc, stackName, instance)
 		if err != nil {
@@ -203,9 +207,9 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 			return reconcile.Result{}, err
 		}
 
-		logger.Info("cloudformation stack created successfully", zap.String("StackName", stackName))
+		logger.Info("cloudformation stack created successfully")
 		instance.Status.Status = StatusCreating
-		instance.SetFinalizers(finalizers.AddFinalizer(instance, FinalizerCFNStack))
+		instance.SetFinalizers(finalizers.AddFinalizer(instance, finalizer))
 		err = r.Update(context.TODO(), instance)
 		if err != nil {
 			return reconcile.Result{}, err
@@ -216,29 +220,25 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		return reconcile.Result{}, err
 	}
 
-	logger.Info("Found Stack", zap.String("StackStatus", *stack.StackStatus))
+	if awsHelper.IsPending(*stack.StackStatus) {
+		logger.Info("waiting for stack to complete", zap.String("StackStatus", *stack.StackStatus))
+		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+	}
 
-	if *stack.StackStatus == cloudformation.StackStatusCreateFailed ||
-		*stack.StackStatus == cloudformation.StackStatusRollbackFailed ||
-		*stack.StackStatus == cloudformation.StackStatusUpdateRollbackFailed {
+	if awsHelper.IsComplete(*stack.StackStatus) {
+		logger.Info("stack complete", zap.String("StackStatus", *stack.StackStatus))
+		instance.Status.Status = StatusCreateComplete
+		return reconcile.Result{}, r.Update(context.TODO(), instance)
+	}
+
+	if awsHelper.IsFailed(*stack.StackStatus) {
+		logger.Info("stack in failed state", zap.String("StackStatus", *stack.StackStatus))
 		instance.Status.Status = StatusFailed
 		return reconcile.Result{}, r.Update(context.TODO(), instance)
 	}
 
-	// The Control Plane doesn't have any configurable bits.  Updates would go here if any are added.
-
-	if *stack.StackStatus != cloudformation.StackStatusCreateComplete &&
-		*stack.StackStatus != cloudformation.StackStatusUpdateComplete &&
-		*stack.StackStatus != cloudformation.StackStatusRollbackComplete &&
-		*stack.StackStatus != cloudformation.StackStatusUpdateRollbackComplete {
-		// Stack isn't done, wait longer.
-		logger.Info("Stack not Complete requeueing")
-		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
-	}
-
-	logger.Info("Stack Creation Complete")
-	instance.Status.Status = StatusCreateComplete
-	return reconcile.Result{}, r.Update(context.TODO(), instance)
+	r.fail(instance, "stack in unexpected state", err, logger)
+	return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
 func (r *ReconcileControlPlane) fail(instance *clusterv1alpha1.ControlPlane, msg string, err error, logger *zap.Logger) {
@@ -259,7 +259,7 @@ func (r *ReconcileControlPlane) createControlPlaneStack(cfnSvc cloudformationifa
 		return err
 	}
 
-	body, err := cfnhelper.GetCFNTemplateBody(controlplaneCFNTemplate, controlPlaneTemplateInput{
+	body, err := awsHelper.GetCFNTemplateBody(controlplaneCFNTemplate, controlPlaneTemplateInput{
 		ClusterName: instance.Spec.ClusterName,
 		Version:     instance.GetVersion(),
 		Network:     network,
