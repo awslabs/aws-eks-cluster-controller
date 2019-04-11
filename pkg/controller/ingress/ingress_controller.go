@@ -199,8 +199,11 @@ func (r *ReconcileIngress) Reconcile(request reconcile.Request) (reconcile.Resul
 	}
 
 	log.Info("found remote ingress")
-	if !reflect.DeepEqual(found.Spec, rIngress.Spec) {
+	if !reflect.DeepEqual(found.Spec, rIngress.Spec) ||
+		!reflect.DeepEqual(found.Annotations, rIngress.Annotations) {
 		found.Spec = rIngress.Spec
+		found.Annotations = rIngress.Annotations
+
 		log.Info("updating ingress")
 		err := client.Update(context.TODO(), found)
 		if err != nil {
