@@ -2,128 +2,383 @@ package nodegroup
 
 import (
 	"context"
+	"fmt"
+	"reflect"
+	"sort"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
+	"github.com/awslabs/aws-eks-cluster-controller/pkg/apis"
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
 	awsHelper "github.com/awslabs/aws-eks-cluster-controller/pkg/aws"
 	"github.com/awslabs/aws-eks-cluster-controller/pkg/logging"
 	"github.com/onsi/gomega"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
+	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var c client.Client
+var errDoesNotExist = awserr.New("ValidationError", `ValidationError: Stack with id eks-foo-cluster does not exist, status code: 400, request id: 42`, nil)
 
-func getEKSCluster(name string) *clusterv1alpha1.EKS {
-	return &clusterv1alpha1.EKS{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-		Spec: clusterv1alpha1.EKSSpec{
-			AccountID:            "1234foo",
-			CrossAccountRoleName: "foo-role",
-			Region:               "us-test-1",
-			ControlPlane: clusterv1alpha1.ControlPlaneSpec{
-				ClusterName: "cluster-stuff",
-			},
-			NodeGroups: []clusterv1alpha1.NodeGroupSpec{
-				clusterv1alpha1.NodeGroupSpec{Name: "NG1", IAMPolicies: []v1alpha1.Policy{}},
-			},
-		},
+func defaultcfnSvc() *awsHelper.MockCloudformationAPI {
+	return &awsHelper.MockCloudformationAPI{
+		FailDescribe: true,
+		Err:          errDoesNotExist,
 	}
 }
 
-const timeout = time.Second * 5
-
-func newTestReconciler(mgr manager.Manager) *ReconcileNodeGroup {
-	var errDoesNotExist = awserr.New("ValidationError", `ValidationError: Stack with id eks-foopla-nodegroup-ngroup1 does not exist, status code: 400, request id: 42`, nil)
-	return &ReconcileNodeGroup{
-		Client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
-		log:    logging.New(),
-		sess:   nil,
-		cfnSvc: &awsHelper.MockCloudformationAPI{FailDescribe: true, Err: errDoesNotExist},
+func newTestReconciler(cfnSvc *awsHelper.MockCloudformationAPI, ns string, blankObjs ...metav1.Object) *ReconcileNodeGroup {
+	objs := []runtime.Object{}
+	for _, obj := range blankObjs {
+		obj.SetNamespace(ns)
+		objs = append(objs, obj.(runtime.Object))
 	}
-}
-
-var expectedRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: "eks-foopla-nodegroup-ngroup1", Namespace: "default"}}
-var ngKey = types.NamespacedName{Name: "eks-foopla-nodegroup-ngroup1", Namespace: "default"}
-
-func TestNodeGroupReconcile(t *testing.T) {
-	g := gomega.NewGomegaWithT(t)
-
-	instance := &clusterv1alpha1.NodeGroup{
+	objs = append(objs, &clusterv1alpha1.EKS{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "eks-foopla-nodegroup-ngroup1",
-			Namespace: "default",
-			Labels:    map[string]string{"eks.owner.name": "eks-foopla", "eks.owner.namespace": "default"},
+			Name:      "test-eks-name",
+			Namespace: "test-eks-namespace",
 		},
-		Spec: clusterv1alpha1.NodeGroupSpec{
-			Name:        "ngroup1",
-			IAMPolicies: []v1alpha1.Policy{},
+		Spec: clusterv1alpha1.EKSSpec{
+			ControlPlane: clusterv1alpha1.ControlPlaneSpec{
+				ClusterName: "test-clustername",
+			},
+		},
+	})
+
+	return &ReconcileNodeGroup{
+		Client: fakeclient.NewFakeClient(objs...),
+		scheme: scheme.Scheme,
+		log:    logging.New(),
+		cfnSvc: cfnSvc,
+	}
+}
+
+func TestReconcile(t *testing.T) {
+
+	tests := []struct {
+		name          string
+		cfnSvc        *awsHelper.MockCloudformationAPI
+		request       reconcile.Request
+		worldState    []metav1.Object
+		finalState    *clusterv1alpha1.NodeGroup
+		wantErr       bool
+		wantCfnWrites int
+	}{
+		{
+			name: "updates instance status to error if missing labels",
+			worldState: []metav1.Object{
+				&clusterv1alpha1.NodeGroup{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "uut",
+					},
+				},
+			},
+			finalState: &clusterv1alpha1.NodeGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "uut",
+				},
+				Status: clusterv1alpha1.NodeGroupStatus{
+					Status: "Error",
+				},
+			},
+			cfnSvc:  defaultcfnSvc(),
+			wantErr: true,
+		},
+		{
+			name: "updates instance status to error if missing EKS cluster",
+			worldState: []metav1.Object{
+				&clusterv1alpha1.NodeGroup{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "uut",
+						Labels: map[string]string{
+							"eks.owner.name":      "test-eks-name",
+							"eks.owner.namespace": "test-eks-doesnotexist",
+						},
+					},
+				},
+			},
+			finalState: &clusterv1alpha1.NodeGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "uut",
+				},
+				Status: clusterv1alpha1.NodeGroupStatus{
+					Status: "Error",
+				},
+			},
+			cfnSvc:  defaultcfnSvc(),
+			wantErr: true,
+		},
+		{
+			name: "can create a controlplane stack",
+			worldState: []metav1.Object{
+				&clusterv1alpha1.NodeGroup{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "uut",
+						Labels: map[string]string{
+							"eks.owner.name":      "test-eks-name",
+							"eks.owner.namespace": "test-eks-namespace",
+						},
+					},
+				},
+			},
+			finalState: &clusterv1alpha1.NodeGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "uut",
+					Finalizers: []string{
+						"cfn-stack.nodegroup.eks.amazonaws.com",
+					},
+				},
+				Status: clusterv1alpha1.NodeGroupStatus{
+					Status: "Creating",
+				},
+			},
+			cfnSvc:        defaultcfnSvc(),
+			wantCfnWrites: 1,
+		},
+		{
+			name: "will complete when controlplane is finished",
+			worldState: []metav1.Object{
+				&clusterv1alpha1.NodeGroup{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "uut",
+						Labels: map[string]string{
+							"eks.owner.name":      "test-eks-name",
+							"eks.owner.namespace": "test-eks-namespace",
+						},
+					},
+				},
+			},
+			finalState: &clusterv1alpha1.NodeGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "uut",
+					Finalizers: []string{
+						"cfn-stack.nodegroup.eks.amazonaws.com",
+					},
+				},
+				Status: clusterv1alpha1.NodeGroupStatus{
+					Status: "Complete",
+				},
+			},
+			cfnSvc: &awsHelper.MockCloudformationAPI{Status: awsHelper.CompleteStatuses[0]},
+		},
+		{
+			name: "will remove finalizer if deleted, and stack does not exist",
+			worldState: []metav1.Object{
+				&clusterv1alpha1.NodeGroup{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "uut",
+						Labels: map[string]string{
+							"eks.owner.name":      "test-eks-name",
+							"eks.owner.namespace": "test-eks-namespace",
+						},
+						Finalizers: []string{
+							"cfn-stack.nodegroup.eks.amazonaws.com",
+						},
+						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					},
+				},
+			},
+			finalState: &clusterv1alpha1.NodeGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "uut",
+				},
+				Status: clusterv1alpha1.NodeGroupStatus{},
+			},
+			cfnSvc: defaultcfnSvc(),
+		},
+		{
+			name: "will remove finalizer if deleted, and cfn delete complete",
+			worldState: []metav1.Object{
+				&clusterv1alpha1.NodeGroup{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "uut",
+						Labels: map[string]string{
+							"eks.owner.name":      "test-eks-name",
+							"eks.owner.namespace": "test-eks-namespace",
+						},
+						Finalizers: []string{
+							"cfn-stack.nodegroup.eks.amazonaws.com",
+						},
+						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					},
+				},
+			},
+			finalState: &clusterv1alpha1.NodeGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "uut",
+				},
+				Status: clusterv1alpha1.NodeGroupStatus{},
+			},
+			cfnSvc: &awsHelper.MockCloudformationAPI{Status: cloudformation.StackStatusDeleteComplete},
+		},
+		{
+			name: "will remove delete cfn if deleted",
+			worldState: []metav1.Object{
+				&clusterv1alpha1.NodeGroup{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "uut",
+						Labels: map[string]string{
+							"eks.owner.name":      "test-eks-name",
+							"eks.owner.namespace": "test-eks-namespace",
+						},
+						Finalizers: []string{
+							"cfn-stack.nodegroup.eks.amazonaws.com",
+						},
+						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					},
+				},
+			},
+			finalState: &clusterv1alpha1.NodeGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "uut",
+					Finalizers: []string{
+						"cfn-stack.nodegroup.eks.amazonaws.com",
+					},
+				},
+				Status: clusterv1alpha1.NodeGroupStatus{},
+			},
+			cfnSvc:        &awsHelper.MockCloudformationAPI{Status: cloudformation.StackStatusCreateComplete},
+			wantCfnWrites: 1,
+		},
+		{
+			name: "will do nothing if deleted with nothing to do",
+			worldState: []metav1.Object{
+				&clusterv1alpha1.NodeGroup{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "uut",
+						Labels: map[string]string{
+							"eks.owner.name":      "test-eks-name",
+							"eks.owner.namespace": "test-eks-namespace",
+						},
+
+						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					},
+				},
+			},
+			finalState: &clusterv1alpha1.NodeGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "uut",
+				},
+				Status: clusterv1alpha1.NodeGroupStatus{},
+			},
+			cfnSvc: defaultcfnSvc(),
 		},
 	}
+	count := uint64(0)
+	for _, tt := range tests {
+		count := atomic.AddUint64(&count, 1)
+		ns := fmt.Sprintf("test-%02d", count)
+		func(ns string, count uint64) {
+			t.Run(tt.name, func(t *testing.T) {
+				g := gomega.NewGomegaWithT(t)
 
-	mgr, err := manager.New(cfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	c = mgr.GetClient()
+				reconciler := newTestReconciler(tt.cfnSvc, ns, tt.worldState...)
 
-	reconciler := newTestReconciler(mgr)
-	recFn, requests := SetupTestReconcile(reconciler)
-	g.Expect(add(mgr, recFn)).NotTo(gomega.HaveOccurred())
+				_, err := reconciler.Reconcile(reconcile.Request{NamespacedName: types.NamespacedName{Name: "uut", Namespace: ns}})
 
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
+				if tt.wantErr {
+					g.Expect(err).ToNot(gomega.Succeed())
+				} else {
+					g.Expect(err).To(gomega.Succeed())
+				}
 
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
+				obj := &clusterv1alpha1.NodeGroup{}
+				g.Expect(reconciler.Get(context.TODO(), client.ObjectKey{Name: "uut", Namespace: ns}, obj)).To(gomega.BeNil())
 
-	eksFooCluster := getEKSCluster("eks-foopla")
-
-	g.Expect(c.Create(context.TODO(), eksFooCluster)).NotTo(gomega.HaveOccurred())
-	defer c.Delete(context.TODO(), eksFooCluster)
-
-	err = c.Create(context.TODO(), instance)
-	if apierrors.IsInvalid(err) {
-		t.Logf("failed to create object, got an invalid object error: %v", err)
-		return
+				sort.Strings(obj.Finalizers)
+				g.Expect(obj.Finalizers).To(gomega.Equal(tt.finalState.Finalizers))
+				g.Expect(obj.Spec).To(gomega.Equal(tt.finalState.Spec))
+				g.Expect(obj.Status).To(gomega.Equal(tt.finalState.Status))
+				g.Expect(tt.cfnSvc.Writes).To(gomega.Equal(tt.wantCfnWrites))
+			})
+		}(ns, count)
 	}
-	g.Expect(err).NotTo(gomega.HaveOccurred())
+}
 
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-
-	getNG := &clusterv1alpha1.NodeGroup{}
-	g.Eventually(func() (string, error) {
-		err := c.Get(context.TODO(), ngKey, getNG)
-		return getNG.Status.Status, err
-	}).Should(gomega.Equal(StatusCreating))
-
-	reconciler.cfnSvc = &awsHelper.MockCloudformationAPI{Status: cloudformation.StackStatusCreateInProgress}
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-
-	getNG = &clusterv1alpha1.NodeGroup{}
-	err = c.Get(context.TODO(), ngKey, getNG)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	g.Expect(getNG.Status.Status).Should(gomega.Equal(StatusCreating))
-
-	reconciler.cfnSvc = &awsHelper.MockCloudformationAPI{Status: cloudformation.StackStatusCreateComplete}
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-
-	g.Eventually(func() (string, error) {
-		nodegroup := &clusterv1alpha1.NodeGroup{}
-		err := c.Get(context.TODO(), ngKey, nodegroup)
-		return nodegroup.Status.Status, err
-	}, timeout).Should(gomega.Equal(StatusCreateComplete))
-
-	err = c.Delete(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-
+func TestReconcileNodeGroup_Reconcile_CloudformationStatusChecks(t *testing.T) {
+	apis.AddToScheme(scheme.Scheme)
+	tests := []struct {
+		name     string
+		statuses []string
+		want     reconcile.Result
+		wantErr  bool
+	}{
+		{
+			name:     "requeues if stack has a pending status",
+			statuses: awsHelper.PendingStatuses,
+			want:     reconcile.Result{RequeueAfter: 5 * time.Second},
+			wantErr:  false,
+		},
+		{
+			name:     "completes if stack hsa a completed status",
+			statuses: awsHelper.CompleteStatuses,
+			want:     reconcile.Result{},
+			wantErr:  false,
+		},
+		{
+			name:     "fails if stack has a failed status",
+			statuses: awsHelper.FailedStatuses,
+			want:     reconcile.Result{},
+			wantErr:  false,
+		},
+		{
+			name:     "requeues if stack has an unexpected status",
+			statuses: []string{"invalid status"},
+			want:     reconcile.Result{RequeueAfter: 5 * time.Second},
+			wantErr:  false,
+		},
+	}
+	for _, tt := range tests {
+		for _, status := range tt.statuses {
+			t.Run(tt.name, func(t *testing.T) {
+				r := &ReconcileNodeGroup{
+					Client: fakeclient.NewFakeClient(
+						&clusterv1alpha1.NodeGroup{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "test-controlplane-name",
+								Namespace: "test-controlplane-namespace",
+								Labels: map[string]string{
+									"eks.owner.name":      "test-eks-name",
+									"eks.owner.namespace": "test-eks-namespace",
+								},
+							},
+						},
+						&clusterv1alpha1.EKS{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "test-eks-name",
+								Namespace: "test-eks-namespace",
+							},
+							Spec: clusterv1alpha1.EKSSpec{
+								ControlPlane: clusterv1alpha1.ControlPlaneSpec{
+									ClusterName: "test-clustername",
+								},
+							},
+						},
+					),
+					scheme: scheme.Scheme,
+					log:    logging.New(),
+					cfnSvc: &awsHelper.MockCloudformationAPI{Status: status},
+				}
+				got, err := r.Reconcile(
+					reconcile.Request{
+						NamespacedName: types.NamespacedName{Name: "test-controlplane-name", Namespace: "test-controlplane-namespace"},
+					},
+				)
+				if (err != nil) != tt.wantErr {
+					t.Errorf("ReconcileControlPlane.Reconcile() error = %v, wantErr %v", err, tt.wantErr)
+					return
+				}
+				if !reflect.DeepEqual(got, tt.want) {
+					t.Errorf("ReconcileControlPlane.Reconcile() = %v, want %v", got, tt.want)
+				}
+			})
+		}
+	}
 }

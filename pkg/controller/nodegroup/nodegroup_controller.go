@@ -27,6 +27,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+var (
+	StatusCreateComplete = "Complete"
+	StatusCreating       = "Creating"
+	StatusFailed         = "Failed"
+	StatusError          = "Error"
+
+	FinalizerCFNStack = "cfn-stack.nodegroup.eks.amazonaws.com"
+)
+
+// Add creates a new NodeGroup Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
+// and Start it when the Manager is Started.
+// USER ACTION REQUIRED: update cmd/manager/main.go to call this cluster.Add(mgr) to install this Controller
+func Add(mgr manager.Manager) error {
+	return add(mgr, newReconciler(mgr))
+}
+
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	return &ReconcileNodeGroup{
@@ -36,22 +52,6 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 		sess:   session.Must(session.NewSession()),
 		cfnSvc: nil,
 	}
-}
-
-// ReconcileNodeGroup reconciles a NodeGroup object
-type ReconcileNodeGroup struct {
-	client.Client
-	scheme *runtime.Scheme
-	log    *zap.Logger
-	sess   *session.Session
-	cfnSvc cloudformationiface.CloudFormationAPI
-}
-
-// Add creates a new NodeGroup Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
-// USER ACTION REQUIRED: update cmd/manager/main.go to call this cluster.Add(mgr) to install this Controller
-func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -83,14 +83,14 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 var _ reconcile.Reconciler = &ReconcileNodeGroup{}
 
-var (
-	StatusCreateComplete = "Complete"
-	StatusCreating       = "Creating"
-	StatusFailed         = "Failed"
-	StatusError          = "Error"
-
-	FinalizerCFNStack = "cfn-stack.nodegroup.eks.amazonaws.com"
-)
+// ReconcileNodeGroup reconciles a NodeGroup object
+type ReconcileNodeGroup struct {
+	client.Client
+	scheme *runtime.Scheme
+	log    *zap.Logger
+	sess   *session.Session
+	cfnSvc cloudformationiface.CloudFormationAPI
+}
 
 // Reconcile reads that state of the cluster for a NodeGroup object and makes changes based on the state read
 // and what is in the NodeGroup.Spec
@@ -162,20 +162,29 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		zap.String("StackName", stackName),
 	)
 
-	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
+	stack, err := awsHelper.DescribeStack(cfnSvc, stackName)
+
+	if instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !finalizers.HasFinalizer(instance, FinalizerCFNStack) {
+			logger.Info("adding finalizer", zap.String("Finalizer", FinalizerCFNStack))
+			instance.SetFinalizers(finalizers.AddFinalizer(instance, FinalizerCFNStack))
+		}
+	} else {
 		if finalizers.HasFinalizer(instance, FinalizerCFNStack) {
 			logger.Info("deleting nodegroup cloudformation stack")
 
-			stack, err := awsHelper.DescribeStack(cfnSvc, stackName)
 			if err != nil && awsHelper.IsStackDoesNotExist(err) {
+				logger.Info("stack does not exist, removing finalizer", zap.String("Finalizer", FinalizerCFNStack))
 				instance.SetFinalizers(finalizers.RemoveFinalizer(instance, FinalizerCFNStack))
 				return reconcile.Result{}, r.Update(context.TODO(), instance)
 			}
 			if err != nil {
-				r.fail(instance, "error deleting nodegroup cloudformation stack", err, logger)
+				r.fail(instance, "error deleting controlplane cloudformation stack", err, logger)
 				return reconcile.Result{}, err
 			}
+
 			if *stack.StackStatus == cloudformation.StackStatusDeleteComplete {
+				logger.Info("stack deleted, removing finalizer", zap.String("Finalizer", FinalizerCFNStack))
 				instance.SetFinalizers(finalizers.RemoveFinalizer(instance, FinalizerCFNStack))
 				return reconcile.Result{}, r.Update(context.TODO(), instance)
 			}
@@ -193,9 +202,10 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 			}
 			return reconcile.Result{Requeue: true}, nil
 		}
+		// instance is deleted, but nothing to do.
+		return reconcile.Result{}, nil
 	}
 
-	stack, err := awsHelper.DescribeStack(cfnSvc, stackName)
 	if err != nil && awsHelper.IsStackDoesNotExist(err) {
 		logger.Info("creating nodegroup cloudformation stack")
 
@@ -220,27 +230,25 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 
 	// TODO: Add parameters to obj, and update if parameters change.
 
-	logger.Info("Found Stack", zap.String("StackStatus", *stack.StackStatus))
+	if awsHelper.IsPending(*stack.StackStatus) {
+		logger.Info("waiting for stack to complete", zap.String("StackStatus", *stack.StackStatus))
+		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+	}
 
-	if *stack.StackStatus == cloudformation.StackStatusCreateFailed ||
-		*stack.StackStatus == cloudformation.StackStatusRollbackFailed ||
-		*stack.StackStatus == cloudformation.StackStatusUpdateRollbackFailed {
+	if awsHelper.IsComplete(*stack.StackStatus) {
+		logger.Info("stack complete", zap.String("StackStatus", *stack.StackStatus))
+		instance.Status.Status = StatusCreateComplete
+		return reconcile.Result{}, r.Update(context.TODO(), instance)
+	}
+
+	if awsHelper.IsFailed(*stack.StackStatus) {
+		logger.Info("stack in failed state", zap.String("StackStatus", *stack.StackStatus))
 		instance.Status.Status = StatusFailed
 		return reconcile.Result{}, r.Update(context.TODO(), instance)
 	}
 
-	if *stack.StackStatus != cloudformation.StackStatusCreateComplete &&
-		*stack.StackStatus != cloudformation.StackStatusUpdateComplete &&
-		*stack.StackStatus != cloudformation.StackStatusRollbackComplete &&
-		*stack.StackStatus != cloudformation.StackStatusUpdateRollbackComplete {
-		// Stack isn't done, wait longer.
-		logger.Info("Stack not Complete requeueing")
-		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
-	}
-
-	logger.Info("Stack Creation Complete")
-	instance.Status.Status = StatusCreateComplete
-	return reconcile.Result{}, r.Update(context.TODO(), instance)
+	r.fail(instance, "stack in unexpected state", err, logger)
+	return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
 func (r *ReconcileNodeGroup) fail(instance *clusterv1alpha1.NodeGroup, msg string, err error, logger *zap.Logger) {
