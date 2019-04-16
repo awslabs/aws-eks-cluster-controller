@@ -80,7 +80,7 @@ func (e *EKSAuthorizer) buildKubeconfig(eksSvc eksiface.EKSAPI, clusterName, rol
 		return nil, err
 	}
 
-	if r.Cluster.Name == nil || r.Cluster.Endpoint == nil || r.Cluster.CertificateAuthority.Data == nil {
+	if r.Cluster.Name == nil || r.Cluster.Endpoint == nil || r.Cluster.CertificateAuthority == nil || r.Cluster.CertificateAuthority.Data == nil {
 		log.Error("missing EKS cluster data", zap.String("cluster", clusterName))
 		return nil, fmt.Errorf("unable to build kubeconfig for cluster %s", clusterName)
 	}
