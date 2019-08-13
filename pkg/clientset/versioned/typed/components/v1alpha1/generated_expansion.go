@@ -32,6 +32,8 @@ type DeploymentExpansion interface{}
 
 type IngressExpansion interface{}
 
+type NamespaceExpansion interface{}
+
 type SecretExpansion interface{}
 
 type ServiceExpansion interface{}
