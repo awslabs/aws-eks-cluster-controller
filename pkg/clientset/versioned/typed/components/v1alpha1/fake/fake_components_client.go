@@ -56,6 +56,10 @@ func (c *FakeComponentsV1alpha1) Ingresses(namespace string) v1alpha1.IngressInt
 	return &FakeIngresses{c, namespace}
 }
 
+func (c *FakeComponentsV1alpha1) Namespaces(namespace string) v1alpha1.NamespaceInterface {
+	return &FakeNamespaces{c, namespace}
+}
+
 func (c *FakeComponentsV1alpha1) Secrets(namespace string) v1alpha1.SecretInterface {
 	return &FakeSecrets{c, namespace}
 }

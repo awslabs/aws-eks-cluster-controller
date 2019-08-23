@@ -34,6 +34,7 @@ type ComponentsV1alpha1Interface interface {
 	DaemonSetsGetter
 	DeploymentsGetter
 	IngressesGetter
+	NamespacesGetter
 	SecretsGetter
 	ServicesGetter
 	ServiceAccountsGetter
@@ -71,6 +72,10 @@ func (c *ComponentsV1alpha1Client) Deployments(namespace string) DeploymentInter
 
 func (c *ComponentsV1alpha1Client) Ingresses(namespace string) IngressInterface {
 	return newIngresses(c, namespace)
+}
+
+func (c *ComponentsV1alpha1Client) Namespaces(namespace string) NamespaceInterface {
+	return newNamespaces(c, namespace)
 }
 
 func (c *ComponentsV1alpha1Client) Secrets(namespace string) SecretInterface {
