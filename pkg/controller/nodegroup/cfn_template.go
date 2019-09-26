@@ -10,7 +10,7 @@ Parameters:
   NodeInstanceType:
     Description: EC2 instance type for the node instances
     Type: String
-    Default: m5.large
+    Default: t2.medium
     AllowedValues:
     - t2.small
     - t2.medium
@@ -77,7 +77,7 @@ Parameters:
   NodeAutoScalingGroupMaxSize:
     Type: Number
     Description: Maximum size of Node Group ASG.
-    Default: 3
+    Default: 2
 
   NodeVolumeSize:
     Type: Number

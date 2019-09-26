@@ -121,26 +121,6 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - apps
-  resources:
-  - deployments/status
-  verbs:
-  - get
-  - update
-  - patch
-- apiGroups:
   - components.eks.amazonaws.com
   resources:
   - customresourcedefinitions
@@ -233,6 +213,18 @@ rules:
   - components.eks.amazonaws.com
   resources:
   - ingresses
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - components.eks.amazonaws.com
+  resources:
+  - namespaces
   verbs:
   - get
   - list
