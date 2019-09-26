@@ -2,7 +2,7 @@
 
 ## AWS EKS Cluster Controller
 
-The aws-eks-cluster-controller manages cross account EKS clusters and [supported Kubernetes resources](docs/CurrentComponenets.md).
+The aws-eks-cluster-controller manages cross account EKS clusters and [supported Kubernetes resources](docs/CurrentComponents.md).
 
 This controller is built using the [kubebuilder](https://github.com/kubernetes-sigs/kubebuilder) framework. For more information [read their docs](https://book.kubebuilder.io/)
 
