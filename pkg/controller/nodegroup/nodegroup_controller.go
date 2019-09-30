@@ -3,6 +3,7 @@ package nodegroup
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
@@ -195,11 +196,13 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		}
 	}
 
+	crdParameters := parseCFNParameterFromCRD(instance.Spec)
+
 	stack, err := awsHelper.DescribeStack(cfnSvc, stackName)
 	if err != nil && awsHelper.IsStackDoesNotExist(err) {
 		logger.Info("creating nodegroup cloudformation stack")
 
-		err = r.createNodeGroupStack(cfnSvc, instance, eksCluster)
+		err = r.createNodeGroupStack(cfnSvc, instance, eksCluster, crdParameters)
 		if err != nil {
 			r.fail(instance, "error creating nodegroup cloudformation stack", err, logger)
 			return reconcile.Result{}, err
@@ -218,7 +221,14 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, err
 	}
 
-	// TODO: Add parameters to obj, and update if parameters change.
+	cfnParameters := r.getCFNParametersFromCFNStack(cfnSvc, instance)
+
+	if shouldUpdate(crdParameters, cfnParameters) {
+		logger.Info("Updating the NodeGroup stack with new parameters")
+		r.updateNodeGroupStack(cfnSvc, instance, eksCluster, crdParameters)
+
+		//Set status and check error
+	}
 
 	logger.Info("Found Stack", zap.String("StackStatus", *stack.StackStatus))
 
@@ -257,7 +267,7 @@ type nodeGroupTemplateInput struct {
 	IAMPolicies           []clusterv1alpha1.Policy
 }
 
-func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup, eks *clusterv1alpha1.EKS) error {
+func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup, eks *clusterv1alpha1.EKS, parameters []*cloudformation.Parameter) error {
 
 	templateBody, err := awsHelper.GetCFNTemplateBody(nodeGroupCFNTemplate, nodeGroupTemplateInput{
 		ClusterName:           eks.Spec.ControlPlane.ClusterName,
@@ -281,7 +291,95 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.Clo
 				Value: aws.String(eks.Spec.ControlPlane.ClusterName),
 			},
 		},
+		Parameters: parameters,
 	})
 
 	return err
+}
+
+func (r *ReconcileNodeGroup) updateNodeGroupStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup, eks *clusterv1alpha1.EKS, parameters []*cloudformation.Parameter) error {
+
+	templateBody, err := awsHelper.GetCFNTemplateBody(nodeGroupCFNTemplate, nodeGroupTemplateInput{
+		ClusterName:           eks.Spec.ControlPlane.ClusterName,
+		ControlPlaneStackName: eks.GetControlPlaneStackName(),
+		AMI:                   GetAMI(nodegroup.GetVersion(), eks.Spec.Region),
+		NodeInstanceName:      nodegroup.Name,
+		IAMPolicies:           nodegroup.Spec.IAMPolicies,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	_, err = cfnSvc.UpdateStack(&cloudformation.UpdateStackInput{
+		TemplateBody: aws.String(templateBody),
+		StackName:    aws.String(nodegroup.Name),
+		Capabilities: []*string{aws.String("CAPABILITY_NAMED_IAM"), aws.String("CAPABILITY_IAM")},
+		Tags: []*cloudformation.Tag{
+			{
+				Key:   aws.String("ClusterName"),
+				Value: aws.String(eks.Spec.ControlPlane.ClusterName),
+			},
+		},
+		Parameters: parameters,
+	})
+
+	return err
+}
+
+func parseCFNParameterFromCRD(ngSpec clusterv1alpha1.NodeGroupSpec) []*cloudformation.Parameter {
+	if ngSpec.Instance == nil {
+		return nil
+	}
+
+	var parameter []*cloudformation.Parameter
+
+	if ngSpec.Instance.InstanceType != nil {
+		parameter = append(parameter, &cloudformation.Parameter{
+			ParameterKey:   aws.String("NodeInstanceType"),
+			ParameterValue: ngSpec.Instance.InstanceType,
+		})
+	}
+
+	if ngSpec.Instance.MaxInstanceCount != nil {
+		parameter = append(parameter, &cloudformation.Parameter{
+			ParameterKey:   aws.String("NodeAutoScalingGroupMaxSize"),
+			ParameterValue: aws.String(strconv.Itoa(*ngSpec.Instance.MaxInstanceCount)),
+		})
+	}
+
+	return parameter
+}
+
+func (r *ReconcileNodeGroup) getCFNParametersFromCFNStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup) []*cloudformation.Parameter {
+	log := r.log.With(
+		zap.String("Name", nodegroup.Name),
+	)
+
+	output, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+		StackName: aws.String(nodegroup.Name),
+	})
+
+	//Do appropriate ErrorChecking
+	if err != nil {
+		log.Error("Error trying to describe the stack", zap.Error(err))
+	}
+
+	//Check if more than one stack exists - this should never happen
+
+	return output.Stacks[0].Parameters
+}
+
+func shouldUpdate(crdParams []*cloudformation.Parameter, cfnParams []*cloudformation.Parameter) bool {
+	cfnParamMap := make(map[string]string)
+	for _, param := range cfnParams {
+		cfnParamMap[*param.ParameterKey] = *param.ParameterValue
+	}
+
+	for _, param := range crdParams {
+		if cfnParamMap[*param.ParameterKey] != *param.ParameterValue {
+			return true
+		}
+	}
+	return false
 }
