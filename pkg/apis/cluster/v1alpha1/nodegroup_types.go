@@ -50,6 +50,11 @@ type Instance struct {
 	// +kubebuilder:validation:Minimum=1
 	// +optional
 	MaxInstanceCount *int `json:"maxInstanceCount,omitempty"`
+	// Default Value is 20
+	// +kubebuilder:validation:Maximum=16384
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	EBSVolumeSize *int `json:"ebsVolumeSize,omitempty"`
 }
 
 // NodeGroupStatus defines the observed state of NodeGroup

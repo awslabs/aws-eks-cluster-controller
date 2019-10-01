@@ -91,6 +91,11 @@ spec:
                     type: array
                   instance:
                     properties:
+                      ebsVolumeSize:
+                        format: int64
+                        maximum: 16384
+                        minimum: 1
+                        type: integer
                       instanceType:
                         enum:
                         - t2.small
@@ -273,6 +278,11 @@ spec:
                             type: array
                           instance:
                             properties:
+                              ebsVolumeSize:
+                                format: int64
+                                maximum: 16384
+                                minimum: 1
+                                type: integer
                               instanceType:
                                 enum:
                                 - t2.small

@@ -247,6 +247,11 @@ func (in *Instance) DeepCopyInto(out *Instance) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.EBSVolumeSize != nil {
+		in, out := &in.EBSVolumeSize, &out.EBSVolumeSize
+		*out = new(int)
+		**out = **in
+	}
 	return
 }
 

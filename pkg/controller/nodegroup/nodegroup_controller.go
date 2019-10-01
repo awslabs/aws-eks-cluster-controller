@@ -89,6 +89,7 @@ var (
 	StatusCreating       = "Creating"
 	StatusFailed         = "Failed"
 	StatusError          = "Error"
+	StatusUpdating       = "Updating"
 
 	FinalizerCFNStack = "cfn-stack.nodegroup.eks.amazonaws.com"
 )
@@ -221,13 +222,26 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, err
 	}
 
-	cfnParameters := r.getCFNParametersFromCFNStack(cfnSvc, instance)
+	cfnParameters, err := getCFNParametersFromCFNStack(cfnSvc, instance)
+	if err != nil {
+		r.fail(instance, "error trying to read the CFN Parameters", err, logger)
+		return reconcile.Result{}, err
+	}
 
 	if shouldUpdate(crdParameters, cfnParameters) {
 		logger.Info("Updating the NodeGroup stack with new parameters")
-		r.updateNodeGroupStack(cfnSvc, instance, eksCluster, crdParameters)
-
-		//Set status and check error
+		err := r.updateNodeGroupStack(cfnSvc, instance, eksCluster, crdParameters)
+		if err != nil {
+			r.fail(instance, "error updating nodegroup cloudformation stack", err, logger)
+			return reconcile.Result{}, err
+		}
+		logger.Info("cloudformation stack updated successfully")
+		instance.Status.Status = StatusUpdating
+		err = r.Update(context.TODO(), instance)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{Requeue: true}, nil
 	}
 
 	logger.Info("Found Stack", zap.String("StackStatus", *stack.StackStatus))
@@ -348,26 +362,31 @@ func parseCFNParameterFromCRD(ngSpec clusterv1alpha1.NodeGroupSpec) []*cloudform
 		})
 	}
 
+	if ngSpec.Instance.EBSVolumeSize != nil {
+		parameter = append(parameter, &cloudformation.Parameter{
+			ParameterKey:   aws.String("NodeVolumeSize"),
+			ParameterValue: aws.String(strconv.Itoa(*ngSpec.Instance.EBSVolumeSize)),
+		})
+	}
+
 	return parameter
 }
 
-func (r *ReconcileNodeGroup) getCFNParametersFromCFNStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup) []*cloudformation.Parameter {
-	log := r.log.With(
-		zap.String("Name", nodegroup.Name),
-	)
+func getCFNParametersFromCFNStack(cfnSvc cloudformationiface.CloudFormationAPI, nodegroup *clusterv1alpha1.NodeGroup) ([]*cloudformation.Parameter, error) {
 
 	output, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
 		StackName: aws.String(nodegroup.Name),
 	})
 
-	//Do appropriate ErrorChecking
 	if err != nil {
-		log.Error("Error trying to describe the stack", zap.Error(err))
+		return nil, err
 	}
 
-	//Check if more than one stack exists - this should never happen
+	if len(output.Stacks) != 1 {
+		return nil, fmt.Errorf("Error while describing the stacks, got %d stacks for the name : %s", len(output.Stacks), nodegroup.Name)
+	}
 
-	return output.Stacks[0].Parameters
+	return output.Stacks[0].Parameters, nil
 }
 
 func shouldUpdate(crdParams []*cloudformation.Parameter, cfnParams []*cloudformation.Parameter) bool {
