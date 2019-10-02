@@ -107,6 +107,7 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		zap.String("Name", request.Name),
 		zap.String("NameSpace", request.Namespace),
 	)
+	defer logger.Sync()
 
 	// Fetch the NodeGroup instance
 	instance := &clusterv1alpha1.NodeGroup{}
@@ -235,7 +236,6 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 			r.fail(instance, "error updating nodegroup cloudformation stack", err, logger)
 			return reconcile.Result{}, err
 		}
-		logger.Info("cloudformation stack updated successfully")
 		instance.Status.Status = StatusUpdating
 		err = r.Update(context.TODO(), instance)
 		if err != nil {
