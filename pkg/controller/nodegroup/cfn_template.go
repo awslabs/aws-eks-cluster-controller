@@ -99,7 +99,7 @@ Parameters:
     Type: String
     Default: {{ .NodeInstanceName }}
   
-  AMI:
+  NodeImageId:
     Description: The AMI to use as the base Image of the node, this should follow the recommendations found in https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-ami.html
     Type: String
     Default: {{ .AMI }}
@@ -242,7 +242,7 @@ Resources:
     Properties:
       AssociatePublicIpAddress: 'true'
       IamInstanceProfile: !Ref NodeInstanceProfile
-      ImageId: !Ref AMI
+      ImageId: !Ref NodeImageId
       InstanceType: !Ref NodeInstanceType
       # KeyName: !Ref KeyName
       SecurityGroups:

@@ -373,7 +373,7 @@ func parseCFNParameterFromCRD(ng *clusterv1alpha1.NodeGroup, eks *clusterv1alpha
 
 	if ng.Spec.Version != nil {
 		parameter = append(parameter, &cloudformation.Parameter{
-			ParameterKey:   aws.String("AMI"),
+			ParameterKey:   aws.String("NodeImageId"),
 			ParameterValue: aws.String(GetAMI(ng.GetVersion(), eks.Spec.Region)),
 		})
 	}
