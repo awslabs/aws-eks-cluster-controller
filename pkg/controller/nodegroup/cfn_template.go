@@ -98,6 +98,11 @@ Parameters:
     Description: Unique identifier for the Node Group.
     Type: String
     Default: {{ .NodeInstanceName }}
+  
+  AMI:
+    Description: The AMI to use as the base Image of the node, this should follow the recommendations found in https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-ami.html
+    Type: String
+    Default: {{ .AMI }}
 
 Resources:
 
@@ -237,7 +242,7 @@ Resources:
     Properties:
       AssociatePublicIpAddress: 'true'
       IamInstanceProfile: !Ref NodeInstanceProfile
-      ImageId: {{ .AMI }}
+      ImageId: !Ref AMI
       InstanceType: !Ref NodeInstanceType
       # KeyName: !Ref KeyName
       SecurityGroups:
