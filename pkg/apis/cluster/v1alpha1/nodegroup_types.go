@@ -16,6 +16,8 @@ type NodeGroupSpec struct {
 	Version *string `json:"version,omitempty"`
 	// +optional
 	IAMPolicies []Policy `json:"iamPolicies,omitempty"`
+	// +optional
+	Instance *Instance `json:"instance,omitempty"`
 }
 
 // Policy represents an IAM Policy
@@ -35,6 +37,24 @@ type Statement struct {
 	Effect   string   `json:"effect"`
 	Action   []string `json:"action"`
 	Resource []string `json:"resource"`
+}
+
+// Instance defines the instance details of the nodegroup
+type Instance struct {
+	// Default value is t2.medium
+	// +kubebuilder:validation:Enum=t2.small,t2.medium,t2.large,t2.xlarge,t2.2xlarge,m3.medium,m3.large,m3.xlarge,m3.2xlarge,m4.large,m4.xlarge,m4.2xlarge,m4.4xlarge,m4.10xlarge,m5.large,m5.xlarge,m5.2xlarge,m5.4xlarge,m5.12xlarge,m5.24xlarge,c4.large,c4.xlarge,c4.2xlarge,c4.4xlarge,c4.8xlarge,c5.large,c5.xlarge,c5.2xlarge,c5.4xlarge,c5.9xlarge,c5.18xlarge,i3.large,i3.xlarge,i3.2xlarge,i3.4xlarge,i3.8xlarge,i3.16xlarge,r3.xlarge,r3.2xlarge,r3.4xlarge,r3.8xlarge,r4.large,r4.xlarge,r4.2xlarge,r4.4xlarge,r4.8xlarge,r4.16xlarge,x1.16xlarge,x1.32xlarge,p2.xlarge,p2.8xlarge,p2.16xlarge,p3.2xlarge,p3.8xlarge,p3.16xlarge
+	// +optional
+	InstanceType *string `json:"instanceType,omitempty"`
+	// Default Value is 3
+	// +kubebuilder:validation:Maximum=10
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxInstanceCount *int `json:"maxInstanceCount,omitempty"`
+	// Default Value is 20
+	// +kubebuilder:validation:Maximum=16384
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	EBSVolumeSize *int `json:"ebsVolumeSize,omitempty"`
 }
 
 // NodeGroupStatus defines the observed state of NodeGroup
