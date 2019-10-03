@@ -30,3 +30,12 @@ spec:
               - effect: "Allow"
                 action: ["*"]
                 resource: ["*"]
+    - name: "g2"
+      iamPolicies: 
+        - policyName: "root"
+          policyDocument: 
+            version: "2012-10-17"
+            statement: 
+              - effect: "Allow"
+                action: ["*"]
+                resource: ["*"]
