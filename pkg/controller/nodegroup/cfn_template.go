@@ -98,11 +98,11 @@ Parameters:
     Description: Unique identifier for the Node Group.
     Type: String
     Default: {{ .NodeInstanceName }}
-  
-  NodeImageId:
-    Description: The AMI to use as the base Image of the node, this should follow the recommendations found in https://docs.aws.amazon.com/eks/latest/userguide/eks-optimized-ami.html
-    Type: String
-    Default: {{ .AMI }}
+
+  NodeImageIdSSMParam:
+    Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
+    Default: {{ .NodeImageIdSSMParam }}
+    Description: AWS Systems Manager Parameter Store parameter of the AMI ID for the worker node instances.
 
 Resources:
 
@@ -242,7 +242,7 @@ Resources:
     Properties:
       AssociatePublicIpAddress: 'true'
       IamInstanceProfile: !Ref NodeInstanceProfile
-      ImageId: !Ref NodeImageId
+      ImageId: !Ref NodeImageIdSSMParam
       InstanceType: !Ref NodeInstanceType
       # KeyName: !Ref KeyName
       SecurityGroups:

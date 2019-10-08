@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
@@ -276,7 +277,7 @@ func (r *ReconcileNodeGroup) fail(instance *clusterv1alpha1.NodeGroup, msg strin
 type nodeGroupTemplateInput struct {
 	ClusterName           string
 	ControlPlaneStackName string
-	AMI                   string
+	NodeImageIdSSMParam   string
 	NodeInstanceName      string
 	IAMPolicies           []clusterv1alpha1.Policy
 }
@@ -286,7 +287,7 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.Clo
 	templateBody, err := awsHelper.GetCFNTemplateBody(nodeGroupCFNTemplate, nodeGroupTemplateInput{
 		ClusterName:           eks.Spec.ControlPlane.ClusterName,
 		ControlPlaneStackName: eks.GetControlPlaneStackName(),
-		AMI:                   GetAMI(nodegroup.GetVersion(), eks.Spec.Region),
+		NodeImageIdSSMParam:   getSSMParamKey(nodegroup.GetVersion()),
 		NodeInstanceName:      nodegroup.Name,
 		IAMPolicies:           nodegroup.Spec.IAMPolicies,
 	})
@@ -316,7 +317,7 @@ func (r *ReconcileNodeGroup) updateNodeGroupStack(cfnSvc cloudformationiface.Clo
 	templateBody, err := awsHelper.GetCFNTemplateBody(nodeGroupCFNTemplate, nodeGroupTemplateInput{
 		ClusterName:           eks.Spec.ControlPlane.ClusterName,
 		ControlPlaneStackName: eks.GetControlPlaneStackName(),
-		AMI:                   GetAMI(nodegroup.GetVersion(), eks.Spec.Region),
+		NodeImageIdSSMParam:   getSSMParamKey(nodegroup.GetVersion()),
 		NodeInstanceName:      nodegroup.Name,
 		IAMPolicies:           nodegroup.Spec.IAMPolicies,
 	})
@@ -373,8 +374,8 @@ func parseCFNParameterFromCRD(ng *clusterv1alpha1.NodeGroup, eks *clusterv1alpha
 
 	if ng.Spec.Version != nil {
 		parameter = append(parameter, &cloudformation.Parameter{
-			ParameterKey:   aws.String("NodeImageId"),
-			ParameterValue: aws.String(GetAMI(ng.GetVersion(), eks.Spec.Region)),
+			ParameterKey:   aws.String("NodeImageIdSSMParam"),
+			ParameterValue: aws.String(getSSMParamKey(ng.GetVersion())),
 		})
 	}
 
@@ -410,4 +411,10 @@ func shouldUpdate(crdParams []*cloudformation.Parameter, cfnParams []*cloudforma
 		}
 	}
 	return false
+}
+
+func getSSMParamKey(version string) string {
+	eksOptimizedAMIKey := "/aws/service/eks/optimized-ami/<EKS_VERSION>/amazon-linux-2/recommended/image_id"
+
+	return strings.Replace(eksOptimizedAMIKey, "<EKS_VERSION>", version, -1)
 }

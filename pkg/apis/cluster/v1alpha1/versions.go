@@ -4,10 +4,12 @@ package v1alpha1
 var SupportedVersions = []string{
 	"1.11",
 	"1.12",
+	"1.13",
+	"1.14",
 }
 
 // DefaultVersion is the version that is used if none is supplied
-const DefaultVersion string = "1.12"
+const DefaultVersion string = "1.14"
 
 func isSupportedVersion(version *string) bool {
 	if version == nil {
