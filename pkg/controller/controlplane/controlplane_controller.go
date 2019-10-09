@@ -28,6 +28,7 @@ import (
 var (
 	StatusCreateComplete = "Complete"
 	StatusCreating       = "Creating"
+	StatusUpdating       = "Updating"
 	StatusFailed         = "Failed"
 	StatusError          = "Error"
 )
@@ -198,6 +199,8 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		return reconcile.Result{}, nil
 	}
 
+	crdParameters := parseCFNParameterFromCRD(instance)
+
 	if err != nil && awsHelper.IsStackDoesNotExist(err) {
 		logger.Info("creating stack")
 
@@ -218,6 +221,27 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 	} else if err != nil {
 		r.fail(instance, "error describing stack", err, logger)
 		return reconcile.Result{}, err
+	}
+
+	cfnParameters, err := getCFNParametersFromCFNStack(cfnSvc, stackName)
+	if err != nil {
+		r.fail(instance, "error trying to read the CFN Parameters", err, logger)
+		return reconcile.Result{}, err
+	}
+
+	if shouldUpdate(crdParameters, cfnParameters) {
+		logger.Info("Updating the control Plane")
+
+		err := r.updateControlPlaneStack(cfnSvc, stackName, instance)
+		if err != nil {
+			r.fail(instance, "error updating the controlplane cloudformation stack", err, logger)
+			return reconcile.Result{}, err
+		}
+
+		instance.Status.Status = StatusUpdating
+		r.Update(context.TODO(), instance)
+
+		return reconcile.Result{Requeue: true}, nil
 	}
 
 	if awsHelper.IsPending(*stack.StackStatus) {
@@ -281,4 +305,78 @@ func (r *ReconcileControlPlane) createControlPlaneStack(cfnSvc cloudformationifa
 	})
 	return err
 
+}
+
+func (r *ReconcileControlPlane) updateControlPlaneStack(cfnSvc cloudformationiface.CloudFormationAPI, stackName string, instance *clusterv1alpha1.ControlPlane) error {
+	network, err := instance.GetNetwork()
+	if err != nil {
+		return err
+	}
+
+	body, err := awsHelper.GetCFNTemplateBody(controlplaneCFNTemplate, controlPlaneTemplateInput{
+		ClusterName: instance.Spec.ClusterName,
+		Version:     instance.GetVersion(),
+		Network:     network,
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = cfnSvc.UpdateStack(&cloudformation.UpdateStackInput{
+		TemplateBody: aws.String(body),
+		StackName:    aws.String(stackName),
+		Capabilities: []*string{aws.String("CAPABILITY_IAM")},
+		Tags: []*cloudformation.Tag{
+			{
+				Key:   aws.String("ClusterName"),
+				Value: aws.String(instance.Spec.ClusterName),
+			},
+		},
+	})
+	return err
+
+}
+
+func parseCFNParameterFromCRD(cp *clusterv1alpha1.ControlPlane) []*cloudformation.Parameter {
+	var params []*cloudformation.Parameter
+
+	if cp.Spec.Version != nil {
+		params = append(params, &cloudformation.Parameter{
+			ParameterKey:   aws.String("EKSVersion"),
+			ParameterValue: aws.String(cp.GetVersion()),
+		})
+	}
+
+	return params
+}
+
+func getCFNParametersFromCFNStack(cfnSvc cloudformationiface.CloudFormationAPI, stackName string) ([]*cloudformation.Parameter, error) {
+
+	output, err := cfnSvc.DescribeStacks(&cloudformation.DescribeStacksInput{
+		StackName: aws.String(stackName),
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(output.Stacks) != 1 {
+		return nil, fmt.Errorf("Error while describing the stacks, got %d stacks for the name : %s", len(output.Stacks), stackName)
+	}
+
+	return output.Stacks[0].Parameters, nil
+}
+
+func shouldUpdate(crdParams []*cloudformation.Parameter, cfnParams []*cloudformation.Parameter) bool {
+	cfnParamMap := make(map[string]string)
+	for _, param := range cfnParams {
+		cfnParamMap[*param.ParameterKey] = *param.ParameterValue
+	}
+
+	for _, param := range crdParams {
+		if cfnParamMap[*param.ParameterKey] != *param.ParameterValue {
+			return true
+		}
+	}
+	return false
 }
