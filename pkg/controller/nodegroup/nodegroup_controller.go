@@ -238,9 +238,8 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 			return reconcile.Result{}, err
 		}
 		instance.Status.Status = StatusUpdating
-		r.Update(context.TODO(), instance)
 
-		return reconcile.Result{Requeue: true}, nil
+		return reconcile.Result{Requeue: true}, r.Update(context.TODO(), instance)
 	}
 
 	logger.Info("Found Stack", zap.String("StackStatus", *stack.StackStatus))

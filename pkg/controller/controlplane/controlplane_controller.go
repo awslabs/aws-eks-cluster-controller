@@ -239,9 +239,8 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		}
 
 		instance.Status.Status = StatusUpdating
-		r.Update(context.TODO(), instance)
 
-		return reconcile.Result{Requeue: true}, nil
+		return reconcile.Result{Requeue: true}, r.Update(context.TODO(), instance)
 	}
 
 	if awsHelper.IsPending(*stack.StackStatus) {
