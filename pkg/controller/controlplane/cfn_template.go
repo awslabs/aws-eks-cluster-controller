@@ -8,7 +8,7 @@ Description: 'Amazon EKS Networking + Control Plane [managed by aws-eks-cluster-
 Parameters:
   EKSVersion:
     Type: String
-    Description: Minimum size of Node Group ASG.
+    Description: EKS Version this control plane should run on
     Default: {{ .Version }}
 
 Resources:

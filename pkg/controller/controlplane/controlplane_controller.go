@@ -199,7 +199,7 @@ func (r *ReconcileControlPlane) Reconcile(request reconcile.Request) (reconcile.
 		return reconcile.Result{}, nil
 	}
 
-	crdParameters := parseCFNParameterFromCRD(instance)
+	crdParameters := parseCFNParametersFromCRD(instance)
 
 	if err != nil && awsHelper.IsStackDoesNotExist(err) {
 		logger.Info("creating stack")
@@ -336,7 +336,7 @@ func (r *ReconcileControlPlane) updateControlPlaneStack(cfnSvc cloudformationifa
 
 }
 
-func parseCFNParameterFromCRD(cp *clusterv1alpha1.ControlPlane) []*cloudformation.Parameter {
+func parseCFNParametersFromCRD(cp *clusterv1alpha1.ControlPlane) []*cloudformation.Parameter {
 	var params []*cloudformation.Parameter
 
 	if cp.Spec.Version != nil {

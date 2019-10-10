@@ -199,7 +199,7 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		}
 	}
 
-	crdParameters := parseCFNParameterFromCRD(instance)
+	crdParameters := parseCFNParametersFromCRD(instance)
 
 	stack, err := awsHelper.DescribeStack(cfnSvc, stackName)
 	if err != nil && awsHelper.IsStackDoesNotExist(err) {
@@ -339,32 +339,30 @@ func (r *ReconcileNodeGroup) updateNodeGroupStack(cfnSvc cloudformationiface.Clo
 	return err
 }
 
-func parseCFNParameterFromCRD(ng *clusterv1alpha1.NodeGroup) []*cloudformation.Parameter {
+func parseCFNParametersFromCRD(ng *clusterv1alpha1.NodeGroup) []*cloudformation.Parameter {
 
 	var parameter []*cloudformation.Parameter
 
 	if ng.Spec.Instance != nil {
-		if ng.Spec.Instance != nil {
-			if ng.Spec.Instance.InstanceType != nil {
-				parameter = append(parameter, &cloudformation.Parameter{
-					ParameterKey:   aws.String("NodeInstanceType"),
-					ParameterValue: ng.Spec.Instance.InstanceType,
-				})
-			}
+		if ng.Spec.Instance.InstanceType != nil {
+			parameter = append(parameter, &cloudformation.Parameter{
+				ParameterKey:   aws.String("NodeInstanceType"),
+				ParameterValue: ng.Spec.Instance.InstanceType,
+			})
+		}
 
-			if ng.Spec.Instance.MaxInstanceCount != nil {
-				parameter = append(parameter, &cloudformation.Parameter{
-					ParameterKey:   aws.String("NodeAutoScalingGroupMaxSize"),
-					ParameterValue: aws.String(strconv.Itoa(*ng.Spec.Instance.MaxInstanceCount)),
-				})
-			}
+		if ng.Spec.Instance.MaxInstanceCount != nil {
+			parameter = append(parameter, &cloudformation.Parameter{
+				ParameterKey:   aws.String("NodeAutoScalingGroupMaxSize"),
+				ParameterValue: aws.String(strconv.Itoa(*ng.Spec.Instance.MaxInstanceCount)),
+			})
+		}
 
-			if ng.Spec.Instance.EBSVolumeSize != nil {
-				parameter = append(parameter, &cloudformation.Parameter{
-					ParameterKey:   aws.String("NodeVolumeSize"),
-					ParameterValue: aws.String(strconv.Itoa(*ng.Spec.Instance.EBSVolumeSize)),
-				})
-			}
+		if ng.Spec.Instance.EBSVolumeSize != nil {
+			parameter = append(parameter, &cloudformation.Parameter{
+				ParameterKey:   aws.String("NodeVolumeSize"),
+				ParameterValue: aws.String(strconv.Itoa(*ng.Spec.Instance.EBSVolumeSize)),
+			})
 		}
 	}
 
