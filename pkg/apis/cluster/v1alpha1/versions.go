@@ -9,7 +9,7 @@ var SupportedVersions = []string{
 }
 
 // DefaultVersion is the version that is used if none is supplied
-const DefaultVersion string = "1.14"
+const DefaultVersion string = "1.12"
 
 func isSupportedVersion(version *string) bool {
 	if version == nil {
