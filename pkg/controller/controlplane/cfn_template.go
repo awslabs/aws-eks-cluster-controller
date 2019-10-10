@@ -5,6 +5,12 @@ var controlplaneCFNTemplate = `
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Amazon EKS Networking + Control Plane [managed by aws-eks-cluster-controller]'
 
+Parameters:
+  EKSVersion:
+    Type: String
+    Description: EKS Version this control plane should run on
+    Default: {{ .Version }}
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -147,7 +153,7 @@ Resources:
           - !Ref 'Subnet03'
       RoleArn:
         !GetAtt ServiceRole.Arn
-      Version: '{{.Version}}'
+      Version: !Ref EKSVersion
 Outputs:
 
   SubnetIds:

@@ -99,6 +99,11 @@ Parameters:
     Type: String
     Default: {{ .NodeInstanceName }}
 
+  NodeImageIdSSMParam:
+    Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
+    Default: {{ .NodeImageIdSSMParam }}
+    Description: AWS Systems Manager Parameter Store parameter of the AMI ID for the worker node instances.
+
 Resources:
 
   NodeInstanceProfile:
@@ -237,7 +242,7 @@ Resources:
     Properties:
       AssociatePublicIpAddress: 'true'
       IamInstanceProfile: !Ref NodeInstanceProfile
-      ImageId: {{ .AMI }}
+      ImageId: !Ref NodeImageIdSSMParam
       InstanceType: !Ref NodeInstanceType
       # KeyName: !Ref KeyName
       SecurityGroups:

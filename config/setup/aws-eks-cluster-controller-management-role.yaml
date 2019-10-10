@@ -34,7 +34,10 @@ Resources:
                     "iam:*",
                     "cloudformation:*",
                     "eks:*",
-                    "sts:*"
+                    "sts:*",
+                    "ssm:GetParametersByPath",
+                    "ssm:GetParameters",
+                    "ssm:GetParameter"
                   ],
                   "Resource": "*"
                 }

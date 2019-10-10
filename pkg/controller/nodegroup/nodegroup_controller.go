@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	clusterv1alpha1 "github.com/awslabs/aws-eks-cluster-controller/pkg/apis/cluster/v1alpha1"
@@ -198,7 +199,7 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 		}
 	}
 
-	crdParameters := parseCFNParameterFromCRD(instance.Spec)
+	crdParameters := parseCFNParametersFromCRD(instance)
 
 	stack, err := awsHelper.DescribeStack(cfnSvc, stackName)
 	if err != nil && awsHelper.IsStackDoesNotExist(err) {
@@ -237,11 +238,8 @@ func (r *ReconcileNodeGroup) Reconcile(request reconcile.Request) (reconcile.Res
 			return reconcile.Result{}, err
 		}
 		instance.Status.Status = StatusUpdating
-		err = r.Update(context.TODO(), instance)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		return reconcile.Result{Requeue: true}, nil
+
+		return reconcile.Result{Requeue: true}, r.Update(context.TODO(), instance)
 	}
 
 	logger.Info("Found Stack", zap.String("StackStatus", *stack.StackStatus))
@@ -276,7 +274,7 @@ func (r *ReconcileNodeGroup) fail(instance *clusterv1alpha1.NodeGroup, msg strin
 type nodeGroupTemplateInput struct {
 	ClusterName           string
 	ControlPlaneStackName string
-	AMI                   string
+	NodeImageIdSSMParam   string
 	NodeInstanceName      string
 	IAMPolicies           []clusterv1alpha1.Policy
 }
@@ -286,7 +284,7 @@ func (r *ReconcileNodeGroup) createNodeGroupStack(cfnSvc cloudformationiface.Clo
 	templateBody, err := awsHelper.GetCFNTemplateBody(nodeGroupCFNTemplate, nodeGroupTemplateInput{
 		ClusterName:           eks.Spec.ControlPlane.ClusterName,
 		ControlPlaneStackName: eks.GetControlPlaneStackName(),
-		AMI:                   GetAMI(nodegroup.GetVersion(), eks.Spec.Region),
+		NodeImageIdSSMParam:   getSSMParamKey(nodegroup.GetVersion()),
 		NodeInstanceName:      nodegroup.Name,
 		IAMPolicies:           nodegroup.Spec.IAMPolicies,
 	})
@@ -316,7 +314,7 @@ func (r *ReconcileNodeGroup) updateNodeGroupStack(cfnSvc cloudformationiface.Clo
 	templateBody, err := awsHelper.GetCFNTemplateBody(nodeGroupCFNTemplate, nodeGroupTemplateInput{
 		ClusterName:           eks.Spec.ControlPlane.ClusterName,
 		ControlPlaneStackName: eks.GetControlPlaneStackName(),
-		AMI:                   GetAMI(nodegroup.GetVersion(), eks.Spec.Region),
+		NodeImageIdSSMParam:   getSSMParamKey(nodegroup.GetVersion()),
 		NodeInstanceName:      nodegroup.Name,
 		IAMPolicies:           nodegroup.Spec.IAMPolicies,
 	})
@@ -341,31 +339,37 @@ func (r *ReconcileNodeGroup) updateNodeGroupStack(cfnSvc cloudformationiface.Clo
 	return err
 }
 
-func parseCFNParameterFromCRD(ngSpec clusterv1alpha1.NodeGroupSpec) []*cloudformation.Parameter {
-	if ngSpec.Instance == nil {
-		return nil
-	}
+func parseCFNParametersFromCRD(ng *clusterv1alpha1.NodeGroup) []*cloudformation.Parameter {
 
 	var parameter []*cloudformation.Parameter
 
-	if ngSpec.Instance.InstanceType != nil {
-		parameter = append(parameter, &cloudformation.Parameter{
-			ParameterKey:   aws.String("NodeInstanceType"),
-			ParameterValue: ngSpec.Instance.InstanceType,
-		})
+	if ng.Spec.Instance != nil {
+		if ng.Spec.Instance.InstanceType != nil {
+			parameter = append(parameter, &cloudformation.Parameter{
+				ParameterKey:   aws.String("NodeInstanceType"),
+				ParameterValue: ng.Spec.Instance.InstanceType,
+			})
+		}
+
+		if ng.Spec.Instance.MaxInstanceCount != nil {
+			parameter = append(parameter, &cloudformation.Parameter{
+				ParameterKey:   aws.String("NodeAutoScalingGroupMaxSize"),
+				ParameterValue: aws.String(strconv.Itoa(*ng.Spec.Instance.MaxInstanceCount)),
+			})
+		}
+
+		if ng.Spec.Instance.EBSVolumeSize != nil {
+			parameter = append(parameter, &cloudformation.Parameter{
+				ParameterKey:   aws.String("NodeVolumeSize"),
+				ParameterValue: aws.String(strconv.Itoa(*ng.Spec.Instance.EBSVolumeSize)),
+			})
+		}
 	}
 
-	if ngSpec.Instance.MaxInstanceCount != nil {
+	if ng.Spec.Version != nil {
 		parameter = append(parameter, &cloudformation.Parameter{
-			ParameterKey:   aws.String("NodeAutoScalingGroupMaxSize"),
-			ParameterValue: aws.String(strconv.Itoa(*ngSpec.Instance.MaxInstanceCount)),
-		})
-	}
-
-	if ngSpec.Instance.EBSVolumeSize != nil {
-		parameter = append(parameter, &cloudformation.Parameter{
-			ParameterKey:   aws.String("NodeVolumeSize"),
-			ParameterValue: aws.String(strconv.Itoa(*ngSpec.Instance.EBSVolumeSize)),
+			ParameterKey:   aws.String("NodeImageIdSSMParam"),
+			ParameterValue: aws.String(getSSMParamKey(ng.GetVersion())),
 		})
 	}
 
@@ -401,4 +405,10 @@ func shouldUpdate(crdParams []*cloudformation.Parameter, cfnParams []*cloudforma
 		}
 	}
 	return false
+}
+
+func getSSMParamKey(version string) string {
+	eksOptimizedAMIKey := "/aws/service/eks/optimized-ami/<EKS_VERSION>/amazon-linux-2/recommended/image_id"
+
+	return strings.Replace(eksOptimizedAMIKey, "<EKS_VERSION>", version, -1)
 }
