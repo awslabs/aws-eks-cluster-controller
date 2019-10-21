@@ -202,8 +202,11 @@ func (r *ReconcileService) Reconcile(request reconcile.Request) (reconcile.Resul
 	}
 
 	log.Info("found remote service")
-	if !reflect.DeepEqual(found.Spec, rService.Spec) {
+	if !reflect.DeepEqual(found.Spec, rService.Spec) ||
+		!reflect.DeepEqual(found.Annotations, rService.Annotations) {
 		found.Spec = rService.Spec
+		found.Annotations = rService.Annotations
+
 		log.Info("updating service")
 		err := client.Update(context.TODO(), found)
 		if err != nil {
